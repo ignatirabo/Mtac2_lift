@@ -76,12 +76,12 @@ Definition print_ms' {A} (a : A) := print_ms A.
 Goal unit.
 mrun (print_ms' (@ret)).
 
-Definition bla (A : Type) : M Type :=
-  (mfix1 f (A : Type) : M Type :=
-    mmatch A in Type as A' return M Type with
-    | [? T] (M T):Type => id (ret (T))
-    | [? T (V : forall x : T, Type )] (forall t : T, V t) => \nu_f for A as t : T, @bind (Type) (Type) (f T) (fun a : Type => f (V t))
-    | _ => ret (A)
+Definition bla (A : Type): M (MTele -> Type) :=
+  (mfix1 f (A : Type) : M (MTele -> Type) :=
+    mmatch A in Type as A' return M (MTele -> Type) with
+    (* | [? T] (M T):Type => id (ret (T)) *)
+    (* | [? T (V : forall x : T, Type )] (forall t : T, V t) => \nu_f for A as t : T, @bind (Type) (Type) (f T) (fun a : Type => f (V t)) *)
+    | _ => ret (fun _ => A)
     end) A.
 
 Definition bla' {A} (a : A) := bla A.
