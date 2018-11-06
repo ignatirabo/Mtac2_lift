@@ -39,28 +39,37 @@ Module V2.
     (mfix1 f (A : Type) : M Type :=
       M.print_term A;;
       mmatch A in Type as A' return M Type with
-      | [? m A] @repl m A => ret (MTele_val A)
-      | [? A] (M (@repl m A)):Type => ret ((MFA A):Type)
-      | [? A] (M A):Type => ret (MTele_ConstT A m)
+      | [? m A] @repl m A =>
+          ret (MTele_val A)
+      | [? A] (M (@repl m A)):Type =>
+          ret ((MFA A):Type)
+      | [? A] (M A):Type =>
+          ret (MTele_ConstT A m)
       | [? T1 T2] T1 -> T2 =>
-        M.print "implication";;
-        t1 <- f T1;
-        t2 <- f T2;
-        ret (t1 -> t2)
-      | [? (V : forall X : Type, Type)] (forall X : Type, V X) => M.print "forall1";; \nu_f for A as X : MTele_Ty m,
-                                                                    v <- f (V (@repl m X));
-                                                                    abs_prod_type X v
+          M.print "implication";;
+          t1 <- f T1;
+          t2 <- f T2;
+          ret (t1 -> t2)
+      | [? (V : forall X : Type, Type)] (forall X : Type, V X) =>
+          M.print "forall1";;
+          \nu_f for A as X : MTele_Ty m,
+              v <- f (V (@repl m X));
+              abs_prod_type X v
       | [? (V : forall X : Type, Prop)] (forall X : Type, V X):Type =>
-        M.print "forall1";;
-        \nu_f for A as X : MTele_Ty m,
-          let x := reduce (RedOneStep [rl:RedBeta]) (V (@repl m X)) in
-          v <- f (x);
-          abs_prod_type X v
-      | [? T (V : forall x : T, Type)] (forall t : T, V t) => M.print "forall2";; \nu_f for A as t : T,
-                                                                v1 <- f (V t);
-                                                                abs_prod_type t v1
-      | [? m V A] (V (@repl m A)) => M.failwith "Unused repl"
-      | _ => ret (A)
+          M.print "forall1prop";;
+          \nu_f for A as X : MTele_Ty m,
+              let x := reduce (RedOneStep [rl:RedBeta]) (V (@repl m X)) in
+              v <- f (x);
+              abs_prod_type X v
+      | [? T (V : forall x : T, Type)] (forall t : T, V t) =>
+          M.print "forall2";;
+          \nu_f for A as t : T,
+              v1 <- f (V t);
+              abs_prod_type t v1
+      | [? m V A] (V (@repl m A)) =>
+          M.failwith "Unused repl"
+      | _ =>
+          ret (A)
       end) A.
 
   Definition lift' {A} (a : A) (m : MTele) := lift A m.
