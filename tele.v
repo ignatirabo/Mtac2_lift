@@ -87,67 +87,40 @@ Module V3.
 
   Polymorphic Definition repl {m : MTele} {s : Sort} (A : MTele_Sort s m) := MTele_val A.
   
-  (* This would only be applied in negative parts *)
-  (* I pass a list [X; Y] and a type A and returns X Y sniped and
-     A with the new X and Y *)
-  (* Definition lift_neg (l : list Type) (A : Type) (m : MTele) : M Type := *)
-  (*     let r := (mfix1 f (A : Type) : M (MTele_Sort SType m) := *)
-  (*         mmatch A in Type as A' return M (MTele_Sort SType m) with *)
-  (*         | [? A B] A -> B => *)
-  (*             \nu A' : MTele_Ty m; *)
-                  
-  (*         end) in *)
-  (*     v <- r A; *)
-  (*     ret (MTele_val v). *)
-
   Notation "'[withP' now_ty , now_val '=>' t ]" :=
     (MTele_In (SProp) (fun now_ty now_val => t))
   (at level 0, format "[withP now_ty , now_val => t ]").
 
-  (* Definition lift_conservative (A : Type) (m : MTele) : M (MTele_Ty m) := *)
-  (*     (mfix1 f (A : Type) : M (MTele_Ty m) := *)
-  (*         mmatch A in Type as A' return M (MTele_Ty m) with *)
-  (*         | [? A] @repl m A => *)
-  (*             ret (MTele_val A) *)
-  (*         | [? A] M (@repl m A) => *)
-  (*             _ *)
-  (*         end) A. *)
-
-  Polymorphic Definition lift_neg' (A : Type) (m : MTele) :
-  M (forall (now_ty : forall (s : Sort), MTele_Sort s m -> s)
-       (now_val : forall (s: Sort) (T : MTele_Sort s m), MTele_val T -> now_ty s T),
-        SType) :=
+  Polymorphic Program Definition lift_neg' (A : Type) (m : MTele)
+  (now_ty : forall (s : Sort), MTele_Sort s m -> s)
+  (_ : forall (s: Sort) (T : MTele_Sort s m), MTele_val T -> now_ty s T) : M Type :=
       (mfix1 f (A : Type) :
-      M (forall (now_ty : forall (s : Sort), MTele_Sort s m -> s)
-           (now_val : forall (s: Sort) (T : MTele_Sort s m), MTele_val T -> now_ty s T),
-            SType) :=
+      M Type :=
           mmatch A in Type as A' return
-          M (forall (now_ty : forall (s : Sort), MTele_Sort s m -> s)
-               (now_val : forall (s: Sort) (T : MTele_Sort s m), MTele_val T -> now_ty s T),
-                SType) with
+          M Type with
           | [? A] @repl m SType A =>
-              ret (fun fTy fVal => @fTy SType A)
-          (* | [? (A : MTele_Sort SType m)] (M (@repl m SType A)):Type => *)
-              (* ret (fun fTy fVal => *)
-                  (* let A' := @fTy SType A in *)
-                  (* (M A'):Type) *)
-          (* | [? A B] A -> B => *)
-          (*     A' <- f A; *)
-          (*     B' <- f B; *)
-          (*     ret (fun fTy fVal => *)
-          (*         let A' := fTy SType A' in *)
-          (*         let B' := fTy SType B' in *)
-          (*         (A' -> B')) *)
+              ret (now_ty SType A)
+          | [? (A : MTele_Sort SType m)] (M (@repl m SType A)):Type =>
+              ret (let A' := now_ty SType A in
+                  (M A'):Type)
+          | [? A B] A -> B =>
+              A' <- f A;
+              B' <- f B;
+              ret (A' -> B')
           end) A.
 
   Polymorphic Definition lift_neg (A : Type) (m : MTele) : M Type :=
-      F <- lift_neg' A m;
-      ret (MTele_val (@MTele_In _ m F)). 
+      \nu now_ty : forall (s : Sort), MTele_Sort s m -> s,
+        \nu now_val : _,
+          F <- lift_neg' A m now_ty now_val;
+          F <- abs_fun (A := forall (s: Sort) (T : MTele_Sort s m), MTele_val T -> now_ty s T) (P := fun now_val => Type) now_val F;
+          F <- abs_fun (A := forall (s : Sort), MTele_Sort s m -> s) (P := fun now_ty => (forall (s: Sort) (T : MTele_Sort s m), MTele_val T -> now_ty s T) -> Type) now_ty F;
+          ret (MTele_val (@MTele_In SType m F)). 
 
   (* Set Printing Universes. *)
   Polymorphic Definition lift (A : Type) (m : MTele) : M Type :=
     (mfix2 f (A : Type) (b : bool) : M Type :=
-      M.print_term A;;
+      (* M.print_term A;; *)
       mmatch A in Type as A' return M Type with
       | [? m A] @repl m SType A =>
           ret (MTele_val A)
@@ -185,11 +158,10 @@ Module V3.
   Polymorphic Definition lift' {A} (a : A) (m : MTele) := lift A m.
 
   Polymorphic Definition bla : MTele -> Type.
-  intros m.
-  pose (t := ltac:(mrun (lift' (@ret) mBase))).
+  intros m. Mtac Do Unset_Trace. 
+  pose (t := ltac:(mrun (lift' (@bind) mBase))).
   cbv iota zeta beta fix delta [MTele_In] in t.
-  mrun (lift' (@ret) m).
-Defined.
+  mrun (lift' (@bind) m).
   Show Proof. Abort.
 
 End V3.
