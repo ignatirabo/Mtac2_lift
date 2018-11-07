@@ -107,6 +107,7 @@ Module V3.
               A' <- f A;
               B' <- f B;
               ret (A' -> B')
+          | _ => ret (A)
           end) A.
 
   Polymorphic Definition lift_neg (A : Type) (m : MTele) : M Type :=
@@ -119,49 +120,55 @@ Module V3.
 
   (* Set Printing Universes. *)
   Polymorphic Definition lift (A : Type) (m : MTele) : M Type :=
-    (mfix2 f (A : Type) (b : bool) : M Type :=
-      (* M.print_term A;; *)
+    (mfix1 f (A : Type) : M Type :=
+      M.print_term A;;
       mmatch A in Type as A' return M Type with
       | [? m A] @repl m SType A =>
+          M.print "Case: repl A";;
           ret (MTele_val A)
       | [? A] (M (@repl m SType A)):Type =>
+          M.print "Case: M (repl A)";;
           ret ((MFA A):Type)
       | [? A] (M A):Type =>
+          M.print "Case: M A";;
           ret (MTele_ConstT A m)
-      | [? T1 T2] T1 -> T2 =>
-          M.print "implication";;
-          t1 <- lift_neg T1 m;
-          t2 <- f T2 true;
-          ret (t1 -> t2)
+      | [? A B] A -> B =>
+          M.print "Case: implication";;
+          A' <- lift_neg A m;
+          B' <- f B;
+          ret (A' -> B')
       | [? (V : forall X : Type, Type)] (forall X : Type, V X) =>
-          M.print "forall1";;
+          M.print "Case: forall1 type";;
           \nu_f for A as X : MTele_Ty m,
-              v <- f (V (@repl m SType X)) true;
+              v <- f (V (@repl m SType X));
               abs_prod_type X v
       | [? (V : forall X : Type, Prop)] (forall X : Type, V X):Type =>
-          M.print "forall1prop";;
+          M.print "Case: forall1 prop";;
           \nu_f for A as X : MTele_Ty m,
+              (* Trying to fix fix1 *)
+              (* A <- f (@repl m SType X); *)
+              (* let x := reduce (RedOneStep [rl:RedBeta]) (V A) in *)
               let x := reduce (RedOneStep [rl:RedBeta]) (V (@repl m SType X)) in
-              v <- f (x) true;
+              v <- f (x);
               abs_prod_type X v
       | [? T (V : forall x : T, Type)] (forall t : T, V t) =>
-          M.print "forall2";;
+          M.print "Case: forall2";;
           \nu_f for A as t : T,
-              v1 <- f (V t) true;
+              v1 <- f (V t);
               abs_prod_type t v1
       | [? m V A] (V (@repl m SType A)) =>
           M.failwith "Unused replace"
       | _ =>
           ret (A)
-      end) A true.
+      end) A.
 
   Polymorphic Definition lift' {A} (a : A) (m : MTele) := lift A m.
 
   Polymorphic Definition bla : MTele -> Type.
   intros m. Mtac Do Unset_Trace. 
-  pose (t := ltac:(mrun (lift' (@bind) mBase))).
+  pose (t := ltac:(mrun (lift' (@ret) mBase))).
   cbv iota zeta beta fix delta [MTele_In] in t.
-  mrun (lift' (@bind) m).
+  mrun (lift' (@ret) m).
   Show Proof. Abort.
 
 End V3.
