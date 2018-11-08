@@ -24,17 +24,29 @@ Definition bind1 {A : Type} {C : Type} {B : forall (c : C), Type} : M A -> (A ->
 Definition bind2 {A C: Type} {D : C -> Type} {B : forall (c : C) (d : D c), Type} : M A -> (A -> forall (c : C) (d : D c), M (B c d)) -> forall (c : C) (d : D c), M (B c d) :=
   fun ma f c => @bind1 A (D c) (B c) ma (fun a d => f a c d).
 
-Fixpoint mbind {m : MTele} {A : Type} : forall {B : MTele_Ty m}, M A -> (A -> MFA B) -> MFA B :=
-  match m with
-  | mBase => fun B ma f => @bind A B ma f 
-  | @mTele X F => fun B ma f x => @mbind (F x) A (B x) ma (fun a => f a x)
-  end.
+(* Fixpoint mbind {m : MTele} {A : Type} : forall {B : MTele_Ty m}, M A -> (A -> MFA B) -> MFA B := *)
+(*   match m with *)
+(*   | mBase => fun B ma f => @bind A B ma f *)
+(*   | @mTele X F => fun B ma f x => @mbind (F x) A (B x) ma (fun a => f a x) *)
+(*   end. *)
 
 Notation "'[withP' now_ty , now_val '=>' t ]" :=
   (MTele_In (SProp) (fun now_ty now_val => t))
 (at level 0, format "[withP now_ty , now_val => t ]").
 
-Fixpoint mbind' {m : MTele} : forall {A B : MTele_Ty m},
+(* Fixpoint mbind' {m : MTele} : forall {A B : MTele_Ty m}, *)
+(*                               MFA A -> *)
+(*                               (MTele_val [withP ty , _ => *)
+(*                                 let A' := ty SType A in *)
+(*                                 let B' := ty SType B in *)
+(*                                 (A' -> M B')]) -> *)
+(*                               MFA B := *)
+(*   match m with *)
+(*   | mBase => fun A B ma f => @mbind mBase A B ma f *)
+(*   | @mTele X F => fun A B ma f x => @mbind' (F x) (A x) (B x) (ma x) (f x) *)
+(*   end. *)
+
+Fixpoint mbind {m : MTele} : forall {A B : MTele_Ty m},
                               MFA A ->
                               (MTele_val [withP ty , _ =>
                                 let A' := ty SType A in
@@ -42,9 +54,10 @@ Fixpoint mbind' {m : MTele} : forall {A B : MTele_Ty m},
                                 (A' -> M B')]) ->
                               MFA B :=
   match m with
-  | mBase => fun A B ma f => @mbind mBase A B ma f 
-  | @mTele X F => fun A B ma f x => @mbind' (F x) (A x) (B x) (ma x) (f x)
+  | mBase => fun A B ma f => @bind A B ma f
+  | @mTele X F => fun A B ma f x => @mbind (F x) (A x) (B x) (ma x) (f x)
   end.
+
 (*
 Fixpoint mbind'' {m : MTele} : forall {A B : MTele_Ty m}, MFA A -> (MTele_val A -> MFA B) -> MFA B :=
   match m with
