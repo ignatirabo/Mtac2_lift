@@ -66,35 +66,28 @@ Definition ty_tree (X : Type) : M TyTree :=
 Definition ty_tree' {X : Type} (x : X) := ty_tree X.
 
 (* pol means polarity at that point of the tree *)
+(* l means "left" *)
 (* We don't want the M at the return type *)
-Fixpoint checker (pol : bool) (X : TyTree) : Prop :=
+Fixpoint checker (pol : bool) (l : bool) (X : TyTree) : Prop :=
   match X as X' with
   (* direct telescope cases *)
-  | tyTree_val T =>
-    match negb pol with
-    | true => True
-    | false => False
-    end
-  | tyTree_MFA T =>
-    match negb pol with
-    | true => True
-    | false => False
-    end
-  | tyTree_In s F =>
-    match negb pol with
-    | true => True
-    | false => False
-    end
-  | @tyTree_FATele m T F => forall t : MTele_val T, (checker pol (F t))
+  | tyTree_val T => False
+  | tyTree_MFA T => False
+  | tyTree_In s F => False
+  | @tyTree_FATele m T F => False
   (* non-telescope cases *)
-  | tyTree_M T => True
+  | tyTree_M T =>
+    match andb pol l with
+    | true => False
+    | false => True
+    end
   | tyTree_base T => True
   (* indirect cases *)
-  | tyTree_imp T R => match checker (negb pol) T with
-                     | True => checker pol R
+  | tyTree_imp T R => match checker (negb pol) true T with
+                     | True => checker pol false R
                      end
-  | tyTree_FA T F => forall t : T, checker pol (F t)
-  | tyTree_FAType F => forall T : Type, checker pol (F T)
+  | tyTree_FA T F => forall t : T, checker pol false (F t)
+  | tyTree_FAType F => forall T : Type, checker pol false (F T)
   end.
 
 
@@ -117,8 +110,10 @@ Notation "'[withP' now_ty , now_val '=>' t ]" :=
 Eval compute in (tree_ty (tyTree_base nat)).
 Eval compute in (tree_ty (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T)))).
 
-Eval compute in (checker true (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T)))).
-Eval compute in (checker true (tyTree_FA MTele
+(* This works correctly *)
+Eval compute in (checker true false (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T)))).
+(* Fail because it uses telescopes *)
+Eval compute in (checker true false (tyTree_FA MTele
    (fun t0 : MTele =>
     tyTree_FA (MTele_Ty t0)
       (fun t1 : MTele_Ty t0 =>
