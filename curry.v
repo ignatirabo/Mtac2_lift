@@ -9,14 +9,14 @@ Local Notation InF s n := (forall now_ty : forall s0 : Sort, MTele_Sort s0 n -> 
 (* If recursion is needed then it's TyTree, if not only Type *)
 Inductive TyTree : Type :=
 | tyTree_val {m : MTele} (T : MTele_Ty m) : TyTree
-| tyTree_M (T : Type) : TyTree
+ | tyTree_M (T : Type) : TyTree
 | tyTree_MFA {m : MTele} (T : MTele_Ty m) : TyTree
 | tyTree_In (s : Sort) {m : MTele} (F : InF s m) : TyTree
 | tyTree_imp (T : TyTree) (R : TyTree) : TyTree
 | tyTree_FATele {m : MTele} (T : MTele_Ty m) (F : forall t : MTele_val T, TyTree) : TyTree
 | tyTree_FA (T : Type) (F : T -> TyTree) : TyTree
-| tyTree_FAType (F : Type -> TyTree) : TyTree
-| tyTree_base (T : Type) : TyTree
+ | tyTree_FAType (F : Type -> TyTree) : TyTree
+ | tyTree_base (T : Type) : TyTree
 .
 
 Fixpoint tree_ty (X : TyTree) : Type :=
@@ -123,3 +123,50 @@ Eval compute in (checker true false (tyTree_FA MTele
             (tyTree_imp
                (tyTree_imp (tyTree_val t1)
                   (tyTree_MFA t2)) (tyTree_MFA t2))))))).
+
+Definition NotProperType : Exception. exact exception. Qed.
+
+Eval compute in (checker true _ (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T)))).
+
+Definition checker' : forall (p : bool) (l : bool) (T : TyTree), M (checker p l T) :=
+  mfix3 f (p : bool) (l : bool) (T : TyTree) : M (checker p l T) :=
+    mmatch T as T' return M (checker p l T') with
+    | [? X] tyTree_base X => ret (I)
+    | [? X] tyTree_M X =>
+      match p as p' return M (checker p' l (tyTree_M X)) with
+      | true =>
+        match l as l' return M (checker true l' (tyTree_M X)) with
+        | true => M.raise NotProperType
+        | false => ret (I)
+        end
+      | false => ret (I)
+      end
+    | [? (F : Type -> TyTree)] tyTree_FAType F =>
+      \nu X : Type,
+        t <- f p false (F X);
+        t <- abs_fun (P := fun X : Type => checker p false (F X)) X t;
+        ret (t)
+    | [? (X : Type) (F : X -> TyTree)] tyTree_FA X F =>
+      \nu x : X,
+        t <- f p false (F x);
+        t <- abs_fun (P := fun x : X => checker p false (F x)) x t;
+        ret (t)
+    | [? (X Y : TyTree)] tyTree_imp X Y =>
+      x <- f p l X;
+      mmatch x as x' return M (checker p l Y) with
+      | True =>
+        y <- f p l Y;
+        ret y
+      end
+    | _ => raise NotProperType
+    (*   mtry *)
+    (*     x <- f p l X; *)
+    (*     ret x *)
+    (*   with TypeNotProper =>  *)
+    (*     y <- f p l Y; *)
+    (*   ret (x -> y) *)
+    end.
+
+ltac:(simpl in *; exact _)
+
+(fun T' : TyTree => checker p l T') (tyTree_FAType F)
