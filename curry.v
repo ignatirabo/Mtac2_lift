@@ -83,9 +83,7 @@ Fixpoint checker (pol : bool) (l : bool) (X : TyTree) : Prop :=
     end
   | tyTree_base T => True
   (* indirect cases *)
-  | tyTree_imp T R => match checker (negb pol) true T with
-                     | True => checker pol false R
-                     end
+  | tyTree_imp T R => and (checker (negb pol) true T) (checker pol false R)
   | tyTree_FA T F => forall t : T, checker pol false (F t)
   | tyTree_FAType F => forall T : Type, checker pol false (F T)
   end.
@@ -152,19 +150,10 @@ Definition checker' : forall (p : bool) (l : bool) (T : TyTree), M (checker p l 
         t <- abs_fun (P := fun x : X => checker p false (F x)) x t;
         ret (t)
     | [? (X Y : TyTree)] tyTree_imp X Y =>
-      x <- f p l X;
-      mmatch x as x' return M (checker p l Y) with
-      | True =>
-        y <- f p l Y;
-        ret y
-      end
+      x <- f (negb p) true X;
+      y <- f p false Y;
+      ret (conj x y)
     | _ => raise NotProperType
-    (*   mtry *)
-    (*     x <- f p l X; *)
-    (*     ret x *)
-    (*   with TypeNotProper =>  *)
-    (*     y <- f p l Y; *)
-    (*   ret (x -> y) *)
     end.
 
 ltac:(simpl in *; exact _)
