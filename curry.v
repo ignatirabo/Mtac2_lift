@@ -12,27 +12,27 @@ Inductive TyTree : Type :=
  | tyTree_M (T : Type) : TyTree
 | tyTree_MFA {m : MTele} (T : MTele_Ty m) : TyTree
 | tyTree_In (s : Sort) {m : MTele} (F : InF s m) : TyTree
-| tyTree_imp (T : TyTree) (R : TyTree) : TyTree
+ | tyTree_imp (T : TyTree) (R : TyTree) : TyTree
 | tyTree_FATele {m : MTele} (T : MTele_Ty m) (F : forall t : MTele_val T, TyTree) : TyTree
-| tyTree_FA (T : Type) (F : T -> TyTree) : TyTree
+ | tyTree_FA (T : Type) (F : T -> TyTree) : TyTree
  | tyTree_FAType (F : Type -> TyTree) : TyTree
  | tyTree_base (T : Type) : TyTree
 .
 
-Fixpoint tree_ty (X : TyTree) : Type :=
+Fixpoint to_ty (X : TyTree) : Type :=
   match X as X' with
   | tyTree_val T => MTele_val T
   | tyTree_M T => M T
   | tyTree_MFA T => MFA T
   | tyTree_In s F => MTele_val (MTele_In s F)
-  | tyTree_imp T R => tree_ty T -> tree_ty R
-  | @tyTree_FATele m T F => forall T, tree_ty (F T)
-  | tyTree_FA T F => forall t : T, tree_ty (F t)
-  | tyTree_FAType F => forall T : Type, tree_ty (F T)
+  | tyTree_imp T R => to_ty T -> to_ty R
+  | @tyTree_FATele m T F => forall T, to_ty (F T)
+  | tyTree_FA T F => forall t : T, to_ty (F t)
+  | tyTree_FAType F => forall T : Type, to_ty (F T)
   | tyTree_base T => T
   end.
 
-Definition ty_tree (X : Type) : M TyTree :=
+Definition to_tree (X : Type) : M TyTree :=
   (mfix1 rec (X : Type) : M TyTree :=
     mmatch X as X return M TyTree with
     (* | [? (m : MTele) (T : MTele_Ty m)] MTele_val T =>
@@ -63,7 +63,7 @@ Definition ty_tree (X : Type) : M TyTree :=
     | _ => ret (tyTree_base X)
     end) X.
 
-Definition ty_tree' {X : Type} (x : X) := ty_tree X.
+Definition to_tree' {X : Type} (x : X) := to_tree X.
 
 (* pol means polarity at that point of the tree *)
 (* l means "left" *)
@@ -90,23 +90,23 @@ Fixpoint checker (pol : bool) (l : bool) (X : TyTree) : Prop :=
 
 
 Goal TyTree.
-mrun (ty_tree' (@ret)).
+mrun (to_tree' (@ret)).
 Show Proof.
 
 Goal TyTree.
-mrun (ty_tree'(@bind)).
+mrun (to_tree'(@bind)).
 Show Proof.
 
 Goal TyTree.
-mrun (ty_tree (forall (m : MTele) (A B : MTele_Ty m), MFA A -> (MTele_val A -> MFA B) -> MFA B)).
+mrun (to_tree (forall (m : MTele) (A B : MTele_Ty m), MFA A -> (MTele_val A -> MFA B) -> MFA B)).
 Show Proof.
 
 Notation "'[withP' now_ty , now_val '=>' t ]" :=
   (MTele_In (SProp) (fun now_ty now_val => t))
   (at level 0, format "[withP now_ty , now_val => t ]").
 
-Eval compute in (tree_ty (tyTree_base nat)).
-Eval compute in (tree_ty (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T)))).
+Eval compute in (to_ty (tyTree_base nat)).
+Eval compute in (to_ty (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T)))).
 
 (* This works correctly *)
 Eval compute in (checker true false (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T)))).
@@ -156,6 +156,27 @@ Definition checker' : forall (p : bool) (l : bool) (T : TyTree), M (checker p l 
     | _ => raise NotProperType
     end.
 
-ltac:(simpl in *; exact _)
+Definition ShitHappens : Exception. exact exception. Qed.
 
-(fun T' : TyTree => checker p l T') (tyTree_FAType F)
+Let T := (tyTree_FAType (fun T : Type => tyTree_imp (tyTree_base T) (tyTree_M T))).
+Let t : to_ty T := @ret.
+
+Fixpoint lift (m : MTele) (p l : bool) (T : TyTree) : forall (f : to_ty T) (c : checker p l T), M { T : TyTree & to_ty T} :=
+  match T as T return forall (f : to_ty T) (c : checker p l T), M { T' : TyTree & to_ty T'} with
+  (* | [? X] tyTree_M X => _ *)
+  (* | [? X Y] tyTree_imp X Y => _ *)
+  (* | [? X F] tyTree_FA X F => _ *)
+  | tyTree_FAType F =>
+    fun f c => 
+      c' <- checker' p l (F (MTele_Ty m)); 
+      s <- lift m p l (F (MTele_Ty m)) (f (MTele_Ty m)) c';
+      (* let T := tyTree_FATele _ _ in *)
+      ret (existT to_ty (projT1 s) (projT2 s))
+  (* | [? X] tyTree_base X =>  *)
+  (*   let T := tyTree_base (MTele_Ty m) in *)
+  (*   let f : to_ty T = t *)
+  (*   existT T *)
+  | _ => fun t c => raise ShitHappens
+  end.
+
+projT1
