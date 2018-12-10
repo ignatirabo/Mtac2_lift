@@ -245,9 +245,17 @@ Definition magic (m : MTele) (U : UNCURRY m) (T : TyTree)
     let F : InF SType m := fun nty nval => nty SType A in
     let eq_p : F (now_ty U) (now_val U) = to_ty (tyTree_base (RETURN A U)) := eq_refl in 
     ret (existT _ F eq_p)
-  | [? (A : MTele_Ty m) X Y c] existT _ (tyTree_imp X Y) c =>
-    let F : InF SType m := fun nty nval => (nty X) -> (nty Y) in
-    _
+  | [? X Y c] existT _ (tyTree_imp X Y) c =>
+    (* I don't actually know if it's possible *)
+    (* Is it safe to assume that X and Y are either base or M? *)
+    mmatch tyTree_imp X Y return M (magicR U (tyTree_imp X Y)) with
+    | [? (A : MTele_Ty m) (B : MTele_Ty m)] tyTree_imp (tyTree_base (RETURN A U)) (tyTree_M (RETURN B U)) => 
+      let F : InF SType m := fun nty nval => nty SType A -> nty SType B in
+      let eq_p : F (now_ty U) (now_val U) = to_ty (tyTree_imp (tyTree_base (RETURN A U)) (tyTree_M (RETURN B U))) := eq_refl in
+      ret (existT _ F eq_p)
+    end
+    (* let F : InF SType m := fun nty nval => _ -> _ in *)
+    (* _ *)
     (*let eq_p : F (now_ty U) (now_val U) = to_ty (tyTree_imp X Y) := eq_refl in 
     ret (existT _ F eq_p)*)
   end.
