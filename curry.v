@@ -234,27 +234,31 @@ Let now_ty {m} (U : UNCURRY m) := fun (s' : Sort) (ms : MTele_Sort s' m) => RETU
 Let now_val {m} (U : UNCURRY m) :=
   fun (s' : Sort) (ms : MTele_Sort s' m) (mv : MTele_val ms) => uncurry_val mv U.
 
-Let magicR {m} (U : UNCURRY m) (T : TyTree) := {F : InF SType m & (to_ty T = F (now_ty U) (now_val U))}.
+Let magicR {m} (U : UNCURRY m) (T : TyTree) :=
+  {F : InF SType m & (to_ty T = F (now_ty U) (now_val U))}.
 
 Definition magic (m : MTele) (U : UNCURRY m) (T : TyTree)
-               (p l : bool) :
-               M (magicR U T) :=
+                 (p l : bool) :
+                 M (magicR U T) :=
   (mfix3 f (T : TyTree) (p l : bool) : M (magicR U T) :=
-  mmatch T as e return M (magicR U e) with
-  | [? (A : MTele_Ty m)] tyTree_base (RETURN A U) =>
-    let F : InF SType m := fun nty nval => nty SType A in
-    let eq_p : to_ty (tyTree_base (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
-    ret (existT _ F eq_p)
-  | [? X Y] tyTree_imp X Y =>
-    (* I don't actually know if it's possible *)
-    (* Is it safe to assume that X and Y are either base or M? *)
-    ''(existT _ FX pX) <- f X (negb p) true;
-    ''(existT _ FY pY) <- f Y p false;
-    let F : InF SType m := fun nty nval => (FX nty nval) -> (FY nty nval) in
-    let eq_p : to_ty (tyTree_imp X Y) = F (now_ty U) (now_val U) := ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
-    ret (existT _ F eq_p)
-  | _ => raise ShitHappens
-  end) T p l.
+    mmatch T as e return M (magicR U e) with
+    | [? (A : MTele_Ty m)] tyTree_base (RETURN A U) =>
+      let F : InF SType m := fun nty nval => nty SType A in
+      let eq_p : to_ty (tyTree_base (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
+      ret (existT _ F eq_p)
+    | [? (A : MTele_Ty m)] tyTree_M (RETURN A U) =>
+      let F : InF SType m := fun nty nval => M (nty SType A) in
+      let eq_p : to_ty (tyTree_M (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
+      ret (existT _ F eq_p)
+    | [? X Y] tyTree_imp X Y =>
+      ''(existT _ FX pX) <- f X (negb p) true;
+      ''(existT _ FY pY) <- f Y p false;
+      let F : InF SType m := fun nty nval => (FX nty nval) -> (FY nty nval) in
+      let eq_p : to_ty (tyTree_imp X Y) = F (now_ty U) (now_val U) :=
+        ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
+      ret (existT _ F eq_p)
+    | _ => raise ShitHappens
+    end) T p l.
 
 (*** Lift section *)
 
@@ -263,23 +267,26 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
   match T as T return forall (f : to_ty T) (c : checker p l T), M { T' : TyTree & to_ty T'} with
   | tyTree_base X => (* I destruct X *)
     fun f c =>
-      mmatch existT (fun X : Type => (to_ty (tyTree_base X)) *m checker p l (tyTree_base X) *m UNCURRY m)
+      mmatch existT (fun X : Type => (to_ty (tyTree_base X)) *m
+                                     checker p l (tyTree_base X) *m UNCURRY m)
                     X
                     (m: f, c, U)
       return M { T' : TyTree & to_ty T'} with
-    (*| [? (A : MTele_Ty m)
+      (*| [? (A : MTele_Ty m)
            (f : to_ty (tyTree_base (RETURN A U)))
            (c : checker p l (tyTree_base (RETURN A U)))]
-        existT (fun X : Type => (to_ty (tyTree_base X)) *m checker p l (tyTree_base X) *m UNCURRY m)
+        existT (fun X : Type => (to_ty (tyTree_base X)) *m
+                                checker p l (tyTree_base X) *m UNCURRY m)
                (RETURN A U)
                (m: f, c, U) =>
-          let MTv : MTele_val A := _ in
-          ret (existT (fun X : TyTree => to_ty X) (tyTree_val A) MTv) *)
+        let MTv : MTele_val A := _ in
+        ret (existT (fun X : TyTree => to_ty X) (tyTree_val A) MTv)*)
       | _ => ret (existT (fun X : TyTree => to_ty X) (tyTree_base X) f)
       end
   | tyTree_M X => (* Two cases, one for return value under M, other for any other M *)
     fun f c =>
-      mmatch existT (fun X : Type => (to_ty (tyTree_M X)) *m checker p l (tyTree_M X) *m UNCURRY m)
+      mmatch existT (fun X : Type => (to_ty (tyTree_M X)) *m
+                                     checker p l (tyTree_M X) *m UNCURRY m)
                     X
                     (m: f, c, U)
       return M { T' : TyTree & to_ty T'} with
