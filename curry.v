@@ -237,25 +237,24 @@ Let now_val {m} (U : UNCURRY m) :=
 Let magicR {m} (U : UNCURRY m) (T : TyTree) := {F : InF SType m & (to_ty T = F (now_ty U) (now_val U))}.
 
 Definition magic (m : MTele) (U : UNCURRY m) (T : TyTree)
-               (p l : bool) (c : checker p l T) :
+               (p l : bool) :
                M (magicR U T) :=
-  (mfix4 f (T : TyTree) (p l : bool) (c : checker p l T) : M (magicR U T) :=
-  mmatch existT (fun X : TyTree => checker p l X) T c
-  as e return M (magicR U (projT1 e)) with
-  | [? (A : MTele_Ty m) c] existT _ (tyTree_base (RETURN A U)) c =>
+  (mfix3 f (T : TyTree) (p l : bool) : M (magicR U T) :=
+  mmatch T as e return M (magicR U e) with
+  | [? (A : MTele_Ty m)] tyTree_base (RETURN A U) =>
     let F : InF SType m := fun nty nval => nty SType A in
     let eq_p : to_ty (tyTree_base (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
     ret (existT _ F eq_p)
-  | [? X Y c] existT _ (tyTree_imp X Y) c =>
+  | [? X Y] tyTree_imp X Y =>
     (* I don't actually know if it's possible *)
     (* Is it safe to assume that X and Y are either base or M? *)
-    ''(existT _ FX pX) <- f X (negb p) true (proj1 c);
-    ''(existT _ FY pY) <- f Y p false (proj2 c);
+    ''(existT _ FX pX) <- f X (negb p) true;
+    ''(existT _ FY pY) <- f Y p false;
     let F : InF SType m := fun nty nval => (FX nty nval) -> (FY nty nval) in
     let eq_p : to_ty (tyTree_imp X Y) = F (now_ty U) (now_val U) := ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
     ret (existT _ F eq_p)
   | _ => raise ShitHappens
-  end) T p l c.
+  end) T p l.
 
 (*** Lift section *)
 
@@ -324,9 +323,10 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
   | tyTree_imp X Y =>
     fun f c =>
       \nu x : to_ty X,
-        ''(existT _ Y' f) <- lift m U p false (Y) (f x) (proj2 c); (* lift on right side Y *)
+        (* lift on right side Y *)
+        ''(existT _ Y' f) <- lift m U p false (Y) (f x) (proj2 c);
         f' <- abs_fun x f;
-        ''(existT _ F e) <- magic m U X (negb p) true (proj1 c);
+        ''(existT _ F e) <- magic m U X (negb p) true;
         let G := (F (now_ty U) (now_val U)) -> to_ty Y' in
         match eq_sym e in _ = T return (T -> to_ty Y') -> M _ with
         | eq_refl => fun f' : G =>
