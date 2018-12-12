@@ -206,6 +206,14 @@ Definition uncurry_in {s : Sort} :
   + simpl in *. destruct U. specialize (IH (F x) _ (App X0 x) u). assumption.
 Defined.
 
+Fixpoint curry {m : MTele} :
+  forall {T : MTele_Ty m},
+  (forall U : UNCURRY m, M (RETURN T U)) -> MFA T :=
+  match m with
+  | mBase => fun T F => F tt
+  | mTele f => fun T F x => curry (fun U => F (existT _ x U))
+  end.
+
 (** It uncurries an "UNCURRY" transforming it to an MFA T *)
 Fixpoint curry_val {s : Sort} {m : MTele} :
   forall {A : MTele_Sort s m},
@@ -237,7 +245,7 @@ Let now_val {m} (U : UNCURRY m) :=
 Let magicR {m} (U : UNCURRY m) (T : TyTree) :=
   {F : InF SType m & (to_ty T = F (now_ty U) (now_val U))}.
 
-Definition magic (m : MTele) (U : UNCURRY m) (T : TyTree)
+Definition magic {m : MTele} (U : UNCURRY m) (T : TyTree)
                  (p l : bool) :
                  M (magicR U T) :=
   (mfix3 f (T : TyTree) (p l : bool) : M (magicR U T) :=
@@ -279,26 +287,26 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
                                 checker p l (tyTree_base X) *m UNCURRY m)
                (RETURN A U)
                (m: f, c, U) =>
-        let MTv : MTele_val A := _ in
-        ret (existT (fun X : TyTree => to_ty X) (tyTree_val A) MTv)*)
+        let mt_v : MTele_val A := _ in
+        ret (existT (fun X : TyTree => to_ty X) (tyTree_val A) mt_v)*)
       | _ => ret (existT (fun X : TyTree => to_ty X) (tyTree_base X) f)
       end
   | tyTree_M X => (* Two cases, one for return value under M, other for any other M *)
     fun f c =>
       mmatch existT (fun X : Type => (to_ty (tyTree_M X)) *m
-                                     checker p l (tyTree_M X) *m UNCURRY m)
+                                     checker p l (tyTree_M X))
                     X
-                    (m: f, c, U)
+                    (m: f, c)
       return M { T' : TyTree & to_ty T'} with
-   (* | [? (A : MTele_Ty m)
-           (f : to_ty (tyTree_M (repl A)))
-           (c : checker p l (tyTree_M (repl A)))]
-        existT (fun X : Type => UNCURRY m *m (to_ty (tyTree_M X)) *m checker p l (tyTree_M X))
+      | [? (A : MTele_Ty m) f c]
+        existT (fun X : Type => (to_ty (tyTree_M X) *m checker p l (tyTree_M X)))
                (RETURN A U)
-               (m: U, f, c) =>
+               (m: f, c) =>
+          f <- @abs_fun _ (fun U => to_ty (tyTree_M (RETURN A U))) U f;
+          let f := curry f in
+          ret (existT _ (tyTree_MFA A) f)
           (* let f' := @curry m A (fun U => ret ()) in *)
           (* \nu f' : to_ty (tyTree_MFA A), *)
-          ret (existT (fun X : TyTree => to_ty X) (tyTree_MFA A) f) *)
       | _ => ret (existT (fun X : TyTree => to_ty X) (tyTree_M X) f)
       end
   (*| tyTree_FA X F => (* Here I should use FATele with curry/uncurry *)
@@ -333,7 +341,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         (* lift on right side Y *)
         ''(existT _ Y' f) <- lift m U p false (Y) (f x) (proj2 c);
         f' <- abs_fun x f;
-        ''(existT _ F e) <- magic m U X (negb p) true;
+        ''(existT _ F e) <- magic U X (negb p) true;
         let G := (F (now_ty U) (now_val U)) -> to_ty Y' in
         match eq_sym e in _ = T return (T -> to_ty Y') -> M _ with
         | eq_refl => fun f' : G =>
@@ -345,7 +353,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
     fun f c =>
       \nu A : MTele_Ty m,
         let c' : checker p false (F (RETURN A U)):= c (RETURN A U) in
-        s <- lift m U p false (F (RETURN A U)) (f (RETURN A U)) c'; (* sigT of continuation *)
+        s <- lift m U p false (F (RETURN A U)) (f (RETURN A U)) c';
         let '(existT _ T' f') := s in
         T'' <- abs_fun (P := fun A => TyTree) A T';
         f'' <- abs_fun (P := fun A => to_ty T') A f';
@@ -355,8 +363,11 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
   | _ => fun _ _ => raise ShitHappens
   end.
 
-Check (@ret nat).
+Definition lift' (T : TyTree) (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} :=
+  fun (m : MTele) =>
+  \nu U : UNCURRY m,
+    c <- (checker' true false T);
+    lift m U true false T f c.
 
-Eval compute in lift (mTele (fun x : nat => mBase)) true false (tyTree_FAType (fun T : Type => (tyTree_FA T (fun t : T => tyTree_M T)))) (@ret nat).
 
-projT1
+Eval compute in lift' R r.
