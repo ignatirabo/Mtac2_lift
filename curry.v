@@ -140,7 +140,7 @@ Definition checker' : forall (p : bool) (l : bool) (T : TyTree), M (checker p l 
       match p as p' return M (checker p' l (tyTree_M X)) with
       | true =>
         match l as l' return M (checker true l' (tyTree_M X)) with
-        | true => M.raise NotProperType
+        | true => raise NotProperType
         | false => ret (I)
         end
       | false => ret (I)
@@ -296,36 +296,8 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
           f <- @abs_fun _ (fun U => to_ty (tyTree_M (RETURN A U))) U f;
           let f := curry f in
           ret (existT _ (tyTree_MFA A) f)
-          (* let f' := @curry m A (fun U => ret ()) in *)
-          (* \nu f' : to_ty (tyTree_MFA A), *)
       | _ => ret (existT (fun X : TyTree => to_ty X) (tyTree_M X) f)
       end
-  (*| tyTree_FA X F => (* Here I should use FATele with curry/uncurry *)
-    fun f c =>
-   (* mmatch existT (fun P : { X : Type & (X -> TyTree)} => (to_ty (tyTree_FA (projT1 P) (projT2 P))) *m checker p l (tyTree_FA (projT1 P) (projT2 P)))
-                    (existT _ X F)
-                    (m: f, c)
-      return M { T' : TyTree & to_ty T'} with
-      | [? (A : MTele_Ty m)] existT (fun P : { X : Type & (X -> TyTree)} =>(to_ty (tyTree_FA (projT1 P) (projT2 P))) *m checker p l (tyTree_FA (projT1 P) (projT2 P)))
-      (existT _ (repl A) F)
-      (m: f, c) =>
-        _
-      | _ => ret (existT (fun X : TyTree => to_ty X) (tyTree_FA X F) f)
-      end
-    *)
-      \nu x : X,
-      \nu mty : MTele_Ty m,
-       c' <- checker' p l (F x);
-       s <- lift m p l (F x) (f x) c';
-       F <- abs_fun x (projT1 s);
-       let T := tyTree_FATele mty
-       ret (existT to_ty _ _)
-       (* p1 <- abs_fun x (Projt1 s); *)
-       (* p2 <- abs_fun x (projT2 s); *)
-       \nu tty : MTele_Ty m,
-       let p1 := tyTree_FA tty (fun v : MTele_val tty => projT1 s) in
-       let p2 := (fun v : () => projT2 s) in
-       ret (existT to_ty p1 p2) *)
   | tyTree_imp X Y =>
     fun f c =>
       ''(existT _ F e) <- magic U X (negb p) true;
@@ -342,6 +314,21 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
               (tyTree_imp (tyTree_In SType F) Y')
               f)
         end f
+  | tyTree_FA X F =>
+    fun f c =>
+      \nu x : X,
+      \nu mty : MTele_Ty m,
+       c' <- checker' p l (F x);
+       s <- lift m p l (F x) (f x) c';
+       F <- abs_fun x (projT1 s);
+       let T := tyTree_FATele mty
+       ret (existT to_ty _ _)
+       (* p1 <- abs_fun x (Projt1 s); *)
+       (* p2 <- abs_fun x (projT2 s); *)
+       \nu tty : MTele_Ty m,
+       let p1 := tyTree_FA tty (fun v : MTele_val tty => projT1 s) in
+       let p2 := (fun v : () => projT2 s) in
+       ret (existT to_ty p1 p2)
   | tyTree_FAType F =>
     fun f c =>
       \nu A : MTele_Ty m,
@@ -381,3 +368,28 @@ Eval compute in projT2 (mret m).
 Definition mbind : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' B b m; abs_fun m l)).
 
 Eval compute in projT2 (mbind mBase).
+
+(* Trying lift on a function which shouldn't work. *)
+
+Let F := tyTree_FAType (fun A => tyTree_FAType (fun (B : A -> Type) =>
+  tyTree_imp
+   (tyTree_imp
+     (tyTree_FA A (fun a => tyTree_M (B x)))
+     (tyTree_FA A (fun a => tyTree_M (B x))))
+   (tyTree_FA A (fun a => tyTree_M (B x))))).
+Let f : to_ty F := @mfix1.
+
+Definition mfix : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' F f m; abs_fun m l)).
+*)
+
+   (* mmatch existT (fun P : { X : Type & (X -> TyTree)} => (to_ty (tyTree_FA (projT1 P) (projT2 P))) *m checker p l (tyTree_FA (projT1 P) (projT2 P)))
+                    (existT _ X F)
+                    (m: f, c)
+      return M { T' : TyTree & to_ty T'} with
+      | [? (A : MTele_Ty m)] existT (fun P : { X : Type & (X -> TyTree)} =>(to_ty (tyTree_FA (projT1 P) (projT2 P))) *m checker p l (tyTree_FA (projT1 P) (projT2 P)))
+      (existT _ (repl A) F)
+      (m: f, c) =>
+        _
+      | _ => ret (existT (fun X : TyTree => to_ty X) (tyTree_FA X F) f)
+      end
+    *)
