@@ -225,16 +225,6 @@ Fixpoint curry_val {s : Sort} {m : MTele} :
 
 Definition ShitHappens : Exception. exact exception. Qed.
 
-Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
-Let r : to_ty R := @ret.
-Let r' : to_ty R := fun (A : Type) (a : A) => @ret A a.
-
-Let R'' := (tyTree_FAType (fun A => tyTree_FA A (fun a : A => tyTree_FA (to_ty (tyTree_imp (tyTree_base A) (tyTree_M A))) (fun f : to_ty (tyTree_imp (tyTree_base A) (tyTree_M A)) => tyTree_M A)))).
-Let r'' : to_ty R'' := fun A a f => f a.
-
-Let tb := (tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_FA (M A) (fun a : (M A) => tyTree_FA (to_ty (tyTree_imp (tyTree_base A) (tyTree_M B))) (fun f : to_ty (tyTree_imp (tyTree_base A) (tyTree_M B)) => tyTree_M B))))).
-Let fb : to_ty tb := @bind.
-
 (*** Magic section *)
 
 (* Return: big f with accesors and F now_ty now_ty = to_ty T. *)
@@ -373,4 +363,21 @@ Definition lift' (T : TyTree) (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} 
     c <- (checker' true false T);
     lift m U true false T f c.
 
+Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
+Let r : to_ty R := @ret.
+Let r' : to_ty R := fun (A : Type) (a : A) => @ret A a.
+
+Let R'' := (tyTree_FAType (fun A => tyTree_FA A (fun a : A => tyTree_FA (to_ty (tyTree_imp (tyTree_base A) (tyTree_M A))) (fun f : to_ty (tyTree_imp (tyTree_base A) (tyTree_M A)) => tyTree_M A)))).
+Let r'' : to_ty R'' := fun A a f => f a.
+
+Let B := (tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_M A) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
+Let b : to_ty B := @bind.
+
 Definition mret : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' R r m; abs_fun m l)).
+
+Let m := mTele (fun n : nat => mBase).
+Eval compute in projT2 (mret m).
+
+Definition mbind : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' B b m; abs_fun m l)).
+
+Eval compute in projT2 (mbind mBase).
