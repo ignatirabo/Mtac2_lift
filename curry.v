@@ -276,7 +276,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
   | tyTree_base X => (* I destruct X *)
     fun f c =>
       mmatch existT (fun X : Type => (to_ty (tyTree_base X)) *m
-                                     checker p l (tyTree_base X) *m UNCURRY m)
+                                  checker p l (tyTree_base X) *m UNCURRY m)
                     X
                     (m: f, c, U)
       return M { T' : TyTree & to_ty T'} with
@@ -302,6 +302,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         existT (fun X : Type => (to_ty (tyTree_M X) *m checker p l (tyTree_M X)))
                (RETURN A U)
                (m: f, c) =>
+          print_term f;;
           f <- @abs_fun _ (fun U => to_ty (tyTree_M (RETURN A U))) U f;
           let f := curry f in
           ret (existT _ (tyTree_MFA A) f)
@@ -337,18 +338,20 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
        ret (existT to_ty p1 p2) *)
   | tyTree_imp X Y =>
     fun f c =>
-      \nu x : to_ty X,
+      ''(existT _ F e) <- magic U X (negb p) true;
+      \nu x : MTele_val [WithT now_ty, now_val =>
+                         F now_ty now_val],
+        (* ltac:(rewrite e in f; exact (f (uncurry_in (s:=SType) F x U))) *)
         (* lift on right side Y *)
-        ''(existT _ Y' f) <- lift m U p false (Y) (f x) (proj2 c);
-        f' <- abs_fun x f;
-        ''(existT _ F e) <- magic U X (negb p) true;
-        let G := (F (now_ty U) (now_val U)) -> to_ty Y' in
-        match eq_sym e in _ = T return (T -> to_ty Y') -> M _ with
-        | eq_refl => fun f' : G =>
+        let G := (F (now_ty U) (now_val U)) -> to_ty Y in
+        match eq_sym e in _ = T return (T -> to_ty Y) -> M _ with
+        | eq_refl => fun f : G =>
+          ''(existT _ Y' f) <- lift m U p false (Y) (f (uncurry_in (s:=SType) F x U)) (proj2 c);
+          f <- abs_fun x f;
           ret (existT to_ty
-                      (tyTree_imp (tyTree_In SType F) Y')
-                      (fun mv : MTele_val _ => f' (uncurry_in (s:=SType) F mv U)))
-        end f'
+              (tyTree_imp (tyTree_In SType F) Y')
+              f)
+        end f
   | tyTree_FAType F =>
     fun f c =>
       \nu A : MTele_Ty m,
@@ -356,9 +359,10 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         s <- lift m U p false (F (RETURN A U)) (f (RETURN A U)) c';
         let '(existT _ T' f') := s in
         T'' <- abs_fun (P := fun A => TyTree) A T';
-        f'' <- abs_fun (P := fun A => to_ty T') A f';
+        print_term (T'');;
+        f' <- coerce f';
+        f'' <- abs_fun (P := fun A => to_ty (T'' A)) A f';
         let T'' := tyTree_FATele1 m T'' in
-        f'' <- coerce f'';
         ret (existT to_ty T'' f'')
   | _ => fun _ _ => raise ShitHappens
   end.
@@ -369,5 +373,4 @@ Definition lift' (T : TyTree) (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} 
     c <- (checker' true false T);
     lift m U true false T f c.
 
-
-Eval compute in lift' R r.
+Definition mret : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' R r m; abs_fun m l)).
