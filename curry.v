@@ -84,7 +84,7 @@ Fixpoint checker (pol : bool) (l : bool) (X : TyTree) : Prop :=
   (* non-telescope cases *)
   | tyTree_M T =>
     match andb pol l with
-    | true => False
+    | true => True
     | false => True
     end
   | tyTree_base T => True
@@ -140,7 +140,7 @@ Definition checker' : forall (p : bool) (l : bool) (T : TyTree), M (checker p l 
       match p as p' return M (checker p' l (tyTree_M X)) with
       | true =>
         match l as l' return M (checker true l' (tyTree_M X)) with
-        | true => raise NotProperType
+        | true => ret I
         | false => ret (I)
         end
       | false => ret (I)
@@ -317,18 +317,12 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
   | tyTree_FA X F =>
     fun f c =>
       \nu x : X,
-      \nu mty : MTele_Ty m,
        c' <- checker' p l (F x);
-       s <- lift m p l (F x) (f x) c';
-       F <- abs_fun x (projT1 s);
-       let T := tyTree_FATele mty
-       ret (existT to_ty _ _)
-       (* p1 <- abs_fun x (Projt1 s); *)
-       (* p2 <- abs_fun x (projT2 s); *)
-       \nu tty : MTele_Ty m,
-       let p1 := tyTree_FA tty (fun v : MTele_val tty => projT1 s) in
-       let p2 := (fun v : () => projT2 s) in
-       ret (existT to_ty p1 p2)
+       ''(existT _ F f) <- lift m U p l (F x) (f x) c';
+       F <- abs_fun x F;
+       f <- coerce f;
+       f <- abs_fun x f;
+       ret (existT _ (tyTree_FA X F) (f))
   | tyTree_FAType F =>
     fun f c =>
       \nu A : MTele_Ty m,
@@ -336,9 +330,9 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         s <- lift m U p false (F (RETURN A U)) (f (RETURN A U)) c';
         let '(existT _ T' f') := s in
         T'' <- abs_fun (P := fun A => TyTree) A T';
-        print_term (T'');;
         f' <- coerce f';
         f'' <- abs_fun (P := fun A => to_ty (T'' A)) A f';
+        print_term f'';;
         let T'' := tyTree_FATele1 m T'' in
         ret (existT to_ty T'' f'')
   | _ => fun _ _ => raise ShitHappens
@@ -360,6 +354,7 @@ Let r'' : to_ty R'' := fun A a f => f a.
 Let B := (tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_M A) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
 Let b : to_ty B := @bind.
 
+(*
 Definition mret : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' R r m; abs_fun m l)).
 
 Let m := mTele (fun n : nat => mBase).
@@ -367,10 +362,16 @@ Eval compute in projT2 (mret m).
 
 Definition mbind : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' B b m; abs_fun m l)).
 
-Eval compute in projT2 (mbind mBase).
+Eval cbn in fun m => to_ty (projT1 (mbind m)).
+*)
+
+Let testfT := tyTree_FAType (fun A => tyTree_FA A (fun a => tyTree_M (a = a))).
+Let testf : to_ty testfT := fun A a => ret (eq_refl).
+Definition testfl := ltac:(mrun (\nu m : MTele, l <- lift' testfT testf m; abs_fun m l)).
+Eval cbn in fun m => to_ty (projT1 (testfl m)).
 
 (* Trying lift on a function which shouldn't work. *)
-
+(*
 Let F := tyTree_FAType (fun A => tyTree_FAType (fun (B : A -> Type) =>
   tyTree_imp
    (tyTree_imp
@@ -381,6 +382,17 @@ Let f : to_ty F := @mfix1.
 
 Definition mfix : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' F f m; abs_fun m l)).
 *)
+
+
+Definition fix0 : forall (B : Type), (M B -> M B) -> M B :=
+  fun B f =>
+    @fix1 unit (fun _ => B) (fun g => g) tt.
+
+Let fix0_tree := tyTree_FAType (fun A => tyTree_imp (tyTree_imp (tyTree_M A) (tyTree_M A)) (tyTree_M A)).
+Let fix0_iso : to_ty fix0_tree := @fix0.
+
+Definition mfix : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' fix0_tree fix0_iso m; abs_fun m l)).
+Eval cbn in fun m => projT1 (mfix m).
 
    (* mmatch existT (fun P : { X : Type & (X -> TyTree)} => (to_ty (tyTree_FA (projT1 P) (projT2 P))) *m checker p l (tyTree_FA (projT1 P) (projT2 P)))
                     (existT _ X F)
