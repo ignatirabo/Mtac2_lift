@@ -1,8 +1,7 @@
 - Mtac2
 
--- How to run our tactics --
-1. Using mrun: page 9.
-2. Using MProof.
-
--- The new bind function --
-The bind function 
+-- Primitives and lift
+--- Primitives working
+  - ret
+  - bind
+  - 
