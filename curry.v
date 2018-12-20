@@ -234,7 +234,7 @@ Definition m_check (T : TyTree) (A : Type) (s : bool) : M bool :=
   | [? X] tyTree_M X =>
     mmatch X return M bool with
     | A => ret true
-    | _ => ret false
+    | nat => ret false
     end
   | [? X Y] tyTree_imp X Y => fX <- f X;
                               fY <- f Y;
@@ -274,8 +274,7 @@ Definition magic {m : MTele} (U : UNCURRY m) (T : TyTree)
       let eq_p : to_ty (tyTree_imp X Y) = F (now_ty U) (now_val U) :=
         ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
       ret (existT _ F eq_p)
-    | _ => print_term T;;
-           raise ShitHappens
+    | _ => raise ShitHappens
     end) T p l.
 
 (*** Lift section *)
@@ -285,6 +284,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
   match T as T return forall (f : to_ty T) (c : checker p l T), M { T' : TyTree & to_ty T'} with
   | tyTree_base X => (* I destruct X *)
     fun f c =>
+      print "lift: base";;
       mmatch existT (fun X : Type => (to_ty (tyTree_base X)) *m
                                   checker p l (tyTree_base X) *m UNCURRY m)
                     X
@@ -303,6 +303,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
       end
   | tyTree_M X => (* Two cases, one for return value under M, other for any other M *)
     fun f c =>
+      print "lift: M";;
       mmatch existT (fun X : Type => (to_ty (tyTree_M X)) *m
                                      checker p l (tyTree_M X))
                     X
@@ -312,7 +313,6 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         existT (fun X : Type => (to_ty (tyTree_M X) *m checker p l (tyTree_M X)))
                (RETURN A U)
                (m: f, c) =>
-          print_term f;;
           f <- @abs_fun _ (fun U => to_ty (tyTree_M (RETURN A U))) U f;
           let f := curry f in
           ret (existT _ (tyTree_MFA A) f)
@@ -320,6 +320,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
       end
   | tyTree_imp X Y =>
     fun f c =>
+      print "lift: imp";;
       ''(existT _ F e) <- magic U X (negb p) true;
       \nu x : MTele_val [WithT now_ty, now_val =>
                          F now_ty now_val],
@@ -330,12 +331,14 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         | eq_refl => fun f : G =>
           ''(existT _ Y' f) <- lift m U p false (Y) (f (uncurry_in (s:=SType) F x U)) (proj2 c);
           f <- abs_fun x f;
+          print "survive1";;
           ret (existT to_ty
               (tyTree_imp (tyTree_In SType F) Y')
               f)
         end f
   | tyTree_FA X F =>
     fun f c =>
+      print "lift: FA";;
       \nu x : X,
        c' <- checker' p l (F x);
        ''(existT _ F f) <- lift m U p l (F x) (f x) c';
@@ -345,6 +348,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
        ret (existT _ (tyTree_FA X F) (f))
   | tyTree_FAType F =>
     fun f c =>
+      print "lift: FAType";;
       \nu A : MTele_Ty m,
         let c' : checker p false (F (RETURN A U)):= c (RETURN A U) in
         s <- lift m U p false (F (RETURN A U)) (f (RETURN A U)) c';
@@ -352,8 +356,13 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         T'' <- abs_fun (P := fun A => TyTree) A T';
         f' <- coerce f';
         f'' <- abs_fun (P := fun A => to_ty (T'' A)) A f';
-        print_term f'';;
         let T'' := tyTree_FATele1 m T'' in
+
+        print "T'':";;
+        print_term T'';;
+        print "f'':";;
+        print_term f'';;
+
         ret (existT to_ty T'' f'')
   | _ => fun _ _ => print_term T;;
                     raise ShitHappens
@@ -368,14 +377,13 @@ Definition lift' (T : TyTree) (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} 
 (*** Examples *)
 
 (** ret *)
-(*
+
 Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
 Let r : to_ty R := @ret.
-Let r' : to_ty R := fun (A : Type) (a : A) => @ret A a.
 Definition mret : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' R r m; abs_fun m l)).
 
-Eval cbn in fun m => projT2 (mret m).
-*)
+Eval cbn in fun m => projT1 (mret m).
+
 
 (** bind *)
 (*
@@ -396,9 +404,10 @@ Definition mtry'' : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele
 (** raise': same as mtry' *)
 
 (** is_var: fails with exception VarAppearsInValue *)
-Let T : TyTree := tyTree_FAType (fun A => tyTree_imp (tyTree_base A) (tyTree_M bool)).
-Let t : to_ty T := @is_var.
-Definition mis_var : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
+(* It breaks in the ret of the match of the imp case in lift *)
+Let B : TyTree := tyTree_FAType (fun A => tyTree_imp (tyTree_base A) (tyTree_M bool)).
+Let b : to_ty B := @is_var.
+Definition mis_var : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' B b m; abs_fun m l)).
 
 
 (** nu: same as mtry' *)
