@@ -231,6 +231,8 @@ Definition UnmagicCase : Exception. exact exception. Qed.
 (* Checks if a given type A is found "under M" *)
 (* True implies that A is "under M", false otherwise *)
 Definition m_check (T : TyTree) (A : Type) : M bool :=
+  print "m_check on T:";;
+  print_term T;;
   (mfix1 f (T : TyTree) : M bool :=
   mmatch T return M bool with
   | [? X] tyTree_base X => ret false
@@ -243,7 +245,9 @@ Definition m_check (T : TyTree) (A : Type) : M bool :=
                              fY <- f Y;
                              let r := orb fX fY in
                              ret r
-  | [? F] tyTree_FAType F => f (F A)
+  | [? F] tyTree_FAType F => print_term (F A);;
+                            \nu X : Type,
+                            f (F X)
   | _ => ret false
   end) T.
 
@@ -265,14 +269,17 @@ Definition magic {m : MTele} (U : UNCURRY m) (T : TyTree)
   (mfix3 f (T : TyTree) (p l : bool) : M (magicR U T) :=
     mmatch T as e return M (magicR U e) with
     | [? (A : MTele_Ty m)] tyTree_base (RETURN A U) =>
+      print "magic: base";;
       let F : InF SType m := fun nty nval => nty SType A in
       let eq_p : to_ty (tyTree_base (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
       ret (existT _ F eq_p)
     | [? (A : MTele_Ty m)] tyTree_M (RETURN A U) =>
+      print "magic: M";;
       let F : InF SType m := fun nty nval => M (nty SType A) in
       let eq_p : to_ty (tyTree_M (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
       ret (existT _ F eq_p)
     | [? X Y] tyTree_imp X Y =>
+      print "magic: imp";;
       ''(existT _ FX pX) <- f X (negb p) true;
       ''(existT _ FY pY) <- f Y p false;
       let F : InF SType m := fun nty nval => (FX nty nval) -> (FY nty nval) in
@@ -280,6 +287,7 @@ Definition magic {m : MTele} (U : UNCURRY m) (T : TyTree)
         ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
       ret (existT _ F eq_p)
     | [? A] tyTree_base A =>
+      print "magic: unmagic";;
       let F : InF SType m := fun nty nval => A in
       ret (existT _ F (eq_refl))
     | _ => raise UnmagicCase
@@ -321,6 +329,9 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         existT (fun X : Type => (to_ty (tyTree_M X) *m checker p l (tyTree_M X)))
                (RETURN A U)
                (m: f, c) =>
+          print "I fail here master";;
+          print "f:";;
+          print_term f;;
           f <- @abs_fun _ (fun U => to_ty (tyTree_M (RETURN A U))) U f;
           let f := curry f in
           ret (existT _ (tyTree_MFA A) f)
@@ -450,11 +461,12 @@ Eval cbn in fun m => projT1 (mis_var m).
 *)
 
 (** nu: fails with exception AbsDependencyError *)
-(*
+(**)
 Let T : TyTree := tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_base name) (tyTree_imp (tyTree_base (moption A)) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
 Let t : to_ty T := @nu.
+Definition test_m_check := ltac:(mrun (m_check T bool)).
 Definition mnu : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
-Eval cbn in fun m => to_ty (projT1 (mtry'' m)).
+Eval cbn in fun m => to_ty (projT1 (mnu m)).
 *)
 
 (*** Garbage collector *)
