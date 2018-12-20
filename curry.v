@@ -279,6 +279,9 @@ Definition magic {m : MTele} (U : UNCURRY m) (T : TyTree)
       let eq_p : to_ty (tyTree_imp X Y) = F (now_ty U) (now_val U) :=
         ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
       ret (existT _ F eq_p)
+    | [? A] tyTree_base A =>
+      let F : InF SType m := fun nty nval => A in
+      ret (existT _ F (eq_refl))
     | _ => raise UnmagicCase
     end) T p l.
 
@@ -417,20 +420,26 @@ Eval cbn in fun m => projT1 (mret m).
 Let B := (tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_M A) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
 Let b : to_ty B := @bind.
 Definition mbind : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' B b m; abs_fun m l)).
-
 Eval cbn in fun m => to_ty (projT1 (mbind m)).
 *)
 
-(** mtry': I need to make the M-check so that Magic only takes liftable things *)
- 
+(** mtry' *)
+(*
 Let T : TyTree := tyTree_FAType (fun A => tyTree_imp (tyTree_M A) (tyTree_imp (tyTree_imp (tyTree_base Exception) (tyTree_M A)) (tyTree_M A))).
 Let t : to_ty T := @mtry'.
 Definition mtry'' : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
+Eval cbn in fun m => to_ty (projT1 (mtry'' m)).
+*)
 
+(** raise' *)
+(*
+Let T : TyTree := tyTree_FAType (fun A => tyTree_imp (tyTree_base Exception) (tyTree_M A)).
+Let t : to_ty T := @raise'.
+Definition mraise' : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
+Eval cbn in fun m => to_ty (projT1 (mraise' m)).
+*)
 
-(** raise': same as mtry' *)
-
-(** is_var: fails with exception VarAppearsInValue *)
+(** is_var *)
 (*
 (* Does nothing to the function, which is correct in this case *)
 Let B : TyTree := tyTree_FAType (fun A => tyTree_imp (tyTree_base A) (tyTree_M bool)).
@@ -440,7 +449,13 @@ Definition mis_var : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTel
 Eval cbn in fun m => projT1 (mis_var m).
 *)
 
-(** nu: same as mtry' *)
+(** nu: fails with exception AbsDependencyError *)
+(*
+Let T : TyTree := tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_base name) (tyTree_imp (tyTree_base (moption A)) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
+Let t : to_ty T := @nu.
+Definition mnu : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
+Eval cbn in fun m => to_ty (projT1 (mtry'' m)).
+*)
 
 (*** Garbage collector *)
 (*
