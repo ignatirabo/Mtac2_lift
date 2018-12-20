@@ -460,14 +460,22 @@ Definition mis_var : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTel
 Eval cbn in fun m => projT1 (mis_var m).
 *)
 
-(** nu: fails with exception AbsDependencyError *)
-(**)
+(** nu *)
+(*
 Let T : TyTree := tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_base name) (tyTree_imp (tyTree_base (moption A)) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
 Let t : to_ty T := @nu.
-Definition test_m_check := ltac:(mrun (m_check T bool)).
 Definition mnu : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
 Eval cbn in fun m => to_ty (projT1 (mnu m)).
 *)
+
+(** nu_let *)
+(*
+Let T : TyTree := tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_FAType (fun C => tyTree_imp (tyTree_base name) (tyTree_imp (tyTree_base C) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_imp (tyTree_base C) (tyTree_M B))) (tyTree_M B)))))).
+Let t : to_ty T := @nu_let.
+Definition mnu_let : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
+Eval cbn in fun m => to_ty (projT1 (mnu_let m)).
+*)
+
 
 (*** Garbage collector *)
 (*
