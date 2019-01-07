@@ -97,15 +97,15 @@ Fixpoint checker (pol : bool) (l : bool) (X : TyTree) : Prop :=
 
 Goal TyTree.
 mrun (to_tree' (@ret)).
-Show Proof.
+Show Proof. Qed.
 
 Goal TyTree.
-mrun (to_tree'(@bind)).
-Show Proof.
+mrun (to_tree' (@bind)).
+Show Proof. Qed.
 
 Goal TyTree.
 mrun (to_tree (forall (m : MTele) (A B : MTele_Ty m), MFA A -> (MTele_val A -> MFA B) -> MFA B)).
-Show Proof.
+Show Proof. Qed.
 
 Notation "'[withP' now_ty , now_val '=>' t ]" :=
   (MTele_In (SProp) (fun now_ty now_val => t))
@@ -224,12 +224,12 @@ Fixpoint curry_val {s : Sort} {m : MTele} :
   end.
 
 Definition ShitHappens : Exception. exact exception. Qed.
-Definition UnmagicCase : Exception. exact exception. Qed.
+Definition UnLiftInCase : Exception. exact exception. Qed.
 
 (*** M-check *)
 
 (* Checks if a given type A is found "under M" *)
-(* True implies that A is "under M", false otherwise *)
+(* true iff A is "under M", false otherwise *)
 Definition m_check (T : TyTree) (A : Type) : M bool :=
   print "m_check on T:";;
   print_term T;;
@@ -253,33 +253,33 @@ Definition m_check (T : TyTree) (A : Type) : M bool :=
 
 (* Definition test_m_check := ltac:(mrun (m_check (tyTree_M nat) bool false)). *)
 
-(*** Magic section *)
+(*** Lift In section *)
 
 (* Return: big f with accesors and F now_ty now_ty = to_ty T. *)
 Let now_ty {m} (U : UNCURRY m) := fun (s' : Sort) (ms : MTele_Sort s' m) => RETURN ms U.
 Let now_val {m} (U : UNCURRY m) :=
   fun (s' : Sort) (ms : MTele_Sort s' m) (mv : MTele_val ms) => uncurry_val mv U.
 
-Let magicR {m} (U : UNCURRY m) (T : TyTree) :=
+Let lift_inR {m} (U : UNCURRY m) (T : TyTree) :=
   {F : InF SType m & (to_ty T = F (now_ty U) (now_val U))}.
 
-Definition magic {m : MTele} (U : UNCURRY m) (T : TyTree)
+Definition lift_in {m : MTele} (U : UNCURRY m) (T : TyTree)
                  (p l : bool) :
-                 M (magicR U T) :=
-  (mfix3 f (T : TyTree) (p l : bool) : M (magicR U T) :=
-    mmatch T as e return M (magicR U e) with
+                 M (lift_inR U T) :=
+  (mfix3 f (T : TyTree) (p l : bool) : M (lift_inR U T) :=
+    mmatch T as e return M (lift_inR U e) with
     | [? (A : MTele_Ty m)] tyTree_base (RETURN A U) =>
-      print "magic: base";;
+      print "lift_in: base";;
       let F : InF SType m := fun nty nval => nty SType A in
       let eq_p : to_ty (tyTree_base (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
       ret (existT _ F eq_p)
     | [? (A : MTele_Ty m)] tyTree_M (RETURN A U) =>
-      print "magic: M";;
+      print "lift_in: M";;
       let F : InF SType m := fun nty nval => M (nty SType A) in
       let eq_p : to_ty (tyTree_M (RETURN A U)) = F (now_ty U) (now_val U) := eq_refl in
       ret (existT _ F eq_p)
     | [? X Y] tyTree_imp X Y =>
-      print "magic: imp";;
+      print "lift_in: imp";;
       ''(existT _ FX pX) <- f X (negb p) true;
       ''(existT _ FY pY) <- f Y p false;
       let F : InF SType m := fun nty nval => (FX nty nval) -> (FY nty nval) in
@@ -287,10 +287,10 @@ Definition magic {m : MTele} (U : UNCURRY m) (T : TyTree)
         ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
       ret (existT _ F eq_p)
     | [? A] tyTree_base A =>
-      print "magic: unmagic";;
+      print "lift_in: unlift_in";;
       let F : InF SType m := fun nty nval => A in
       ret (existT _ F (eq_refl))
-    | _ => raise UnmagicCase
+    | _ => raise UnLiftInCase
     end) T p l.
 
 (*** Lift section *)
@@ -329,7 +329,6 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         existT (fun X : Type => (to_ty (tyTree_M X) *m checker p l (tyTree_M X)))
                (RETURN A U)
                (m: f, c) =>
-          print "I fail here master";;
           print "f:";;
           print_term f;;
           f <- @abs_fun _ (fun U => to_ty (tyTree_M (RETURN A U))) U f;
@@ -341,7 +340,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
     fun f c =>
       print "lift: imp";;
       mtry
-        (''(existT _ F e) <- magic U X (negb p) true;
+        (''(existT _ F e) <- lift_in U X (negb p) true;
         \nu x : MTele_val [WithT now_ty, now_val =>
                            F now_ty now_val],
           (* ltac:(rewrite e in f; exact (f (uncurry_in (s:=SType) F x U))) *)
@@ -356,8 +355,8 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
                 (tyTree_imp (tyTree_In SType F) Y')
                 f)
           end f)
-      with UnmagicCase =>
-        print "UnmagicCase raised";;
+      with ShitHappens =>
+        print "UnLiftInCase raised";;
         \nu x : to_ty X,
           ''(existT _ Y' f) <- lift m U p false (Y) (f x) (proj2 c);
           f <- abs_fun x f;
@@ -406,7 +405,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
         print_term f'';;
         ret (existT to_ty T'' f'')
   | _ => fun _ _ => print_term T;;
-                    raise ShitHappens
+                raise ShitHappens
   end.
 
 Definition lift' (T : TyTree) (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} :=
@@ -475,6 +474,13 @@ Let t : to_ty T := @nu_let.
 Definition mnu_let : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
 Eval cbn in fun m => to_ty (projT1 (mnu_let m)).
 *)
+
+(** abs_fun: problem is using lift_in. Can be solved in two ways: not being in the domain of the function (modifying checker) or by being able to not call lift_in *)
+(* Calling lift_in makes it so that U is still used and then it's never abstracted *)
+Let T : TyTree := tyTree_FAType (fun A => tyTree_FA (A -> Type) (fun P : A -> Type => tyTree_FA A (fun x => tyTree_imp (tyTree_base (P x)) (tyTree_M (forall x : A, P x))))).
+Let t : to_ty T := @abs_fun.
+Definition mabs_fun : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
+Eval cbn in fun m => to_ty (projT1 (mnu_let m)).
 
 
 (*** Garbage collector *)
