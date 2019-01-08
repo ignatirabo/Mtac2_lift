@@ -232,13 +232,13 @@ Fixpoint MTele_Cs {s : Sort} (n : MTele) (T : s) : MTele_Sort s n :=
     fun x : X => @MTele_Cs s (F x) T
   end.
 
-Fixpoint MTele_cs {s : Sort} {n : MTele} {T : s} (f : T) : MTele_val (MTele_Cs n T) :=
-  match n as n return MTele_val (@MTele_Cs _ n T) with
+Fixpoint MTele_cs {s : Sort} {n : MTele} {X : Type} (f : M X) : MFA (@MTele_Cs SType n X) :=
+  match n as n return MFA (@MTele_Cs SType n X) with
   | mBase =>
     f
-  | @mTele X F =>
-    Fun (fun x : X => @MTele_cs _ (F x) _ f)
-    (* @Fun s X (fun x => MTele_val (@MTele_Cs _ (F x) T)) (fun x : X => @MTele_cs _ (F x) T f) *)
+  | @mTele Y F =>
+    (* Fun (fun x : X => @MTele_cs _ (F x) _ f) *)
+    @Fun SType Y (fun y : Y => MFA (@MTele_Cs SType (F y) X)) (fun y : Y => @MTele_cs s (F y) X f)
     (* ltac:(simpl in *; refine (@Fun s X (fun x => MTele_val (@MTele_Cs _ (F x) T)) (fun x : X => @MTele_cs _ (F x) T f))) *)
   end.
 
@@ -373,9 +373,9 @@ Polymorphic Fixpoint lift (m : MTele) (U : UNCURRY m) (p l : bool) (T : TyTree) 
           let f := curry f in
           ret (existT _ (tyTree_MFA A) f)
       | _ =>
-        let T := @MTele_Cs SType m X in
-        let f := @MTele_cs SType m (M X) f in 
-        ret (existT (fun X : TyTree => to_ty X) (tyTree_MFA T) f)
+        let T := @MTele_Cs SType m X in (* okay *)
+        let f' := @MTele_cs SType m X f in
+        ret (existT (fun X : TyTree => to_ty X) (tyTree_MFA T) f')
       end
   | tyTree_imp X Y =>
     fun f c =>
