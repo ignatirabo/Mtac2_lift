@@ -275,29 +275,6 @@ Definition is_m (T : TyTree) (A : Type) : M bool :=
   | _ => ret false
   end) T.
 
-(*
-Definition contains_u : TyTree -> M bool :=
-  mfix1 rec (T : TyTree) : M bool :=
-    (mmatch T as T' return M bool with
-    | [? m (A : MTele_Ty m) U] tyTree_base (RETURN A U) =>
-      ret true
-    | [? m (A : MTele_Ty m) U] tyTree_M (RETURN A U) =>
-      ret true
-    | [? X Y] tyTree_imp X Y =>
-      X' <- rec X;
-      Y' <- rec Y;
-      ret (orb X' Y')
-    | [? (F : Type -> TyTree)] tyTree_FAType F =>
-      \nu X : Type,
-        rec (F X)
-    | [? m (A : MTele_Ty m) U F] tyTree_FA (RETURN A U) F =>
-      \nu x : (RETURN A U),
-        rec (F x)
-    | _ =>
-      ret false
-    end).
-*)
-
 Definition contains_u (m : MTele) (U : UNCURRY m) (T : TyTree) : M bool :=
   mtry
     T' <- abs_fun U T;
