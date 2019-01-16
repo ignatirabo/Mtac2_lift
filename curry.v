@@ -1,4 +1,4 @@
-From Mtac2 Require Import Base Mtac2 Specif Sorts MTele MFixDef.
+From Mtac2 Require Import Base Mtac2 Specif Sorts MTele MFixDef MTeleMatch.
 Import Sorts.S.
 Import M.notations.
 Import M.M.
@@ -458,11 +458,6 @@ Let b : to_ty B := @bind.
 Definition mbind : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' B b m; abs_fun m l)).
 Eval cbn in fun m => to_ty (projT1 (mbind m)).
 
-(** Actual attemp idea *)
-(*
-a <- f x;
-*)
-
 (** mtry' *)
 (*
 Let T : TyTree := tyTree_FAType (fun A => tyTree_imp (tyTree_M A) (tyTree_imp (tyTree_imp (tyTree_base Exception) (tyTree_M A)) (tyTree_M A))).
@@ -511,3 +506,41 @@ Let T_abs : TyTree := tyTree_FAType (fun A => tyTree_FA (A -> Type) (fun P : A -
 Let t_abs : to_ty T_abs := @abs_fun.
 Definition mabs_fun : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T_abs t_abs m; abs_fun m l)).
 Eval cbn in fun m => to_ty (projT1 (mabs_fun m)).
+
+(** print *)
+(* Calling lift_in makes it so that U is still used and then it's never abstracted *)
+Let T_print : TyTree := tyTree_imp (tyTree_base (String.string)) (tyTree_M unit).
+Let t_print : to_ty T_print := @print.
+Definition mprint : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T_print t_print m; abs_fun m l)).
+Eval cbn in fun m => to_ty (projT1 (mprint m)).
+
+(** Using MTeleMatch and lifted print *)
+(*
+The type of print is
+print : String.string -> M unit
+With the lift function we generalize this type to
+new_print : forall x : bool, String.string -> M unit
+The `forall x : bool` is added by lift with the telescope
+n := (mTele (fun b : bool => mBase))
+*)
+Definition test1 : forall x : bool, M unit :=
+  mtmmatch true as b return forall x, M unit with
+  | _ =>
+    projT2 (mprint (mTele (fun b : bool => mBase))) "MYPRINT"
+  end.
+
+Definition test1_run := ltac:(mrun (test1 true)).
+
+(*
+This is the same example without using mtmmatch because it really doesn't change anything
+We can check on the *coq* buffer for the message "[DEBUG] MYPRINT2"
+*)
+Definition test2 : forall x : bool, M unit :=
+    projT2 (mprint (mTele (fun b : bool => mBase))) "MYPRINT2".
+
+Definition test2_run := ltac:(mrun (test2 true)).
+
+(*
+- Typeclasses, builds the telescope to match the expected type. 
+- Notation to trigger Mtac 
+*)
