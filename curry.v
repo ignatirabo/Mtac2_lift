@@ -315,30 +315,24 @@ Definition lift_in {m : MTele} (U : ArgsOf m) (T : TyTree)
 
 (* p and l represent "polarity" and "left part of implication" *)
 Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
-  forall (f : to_ty T) (c : checker p l T), M { T : TyTree & to_ty T} :=
-  match T as T return forall (f : to_ty T) (c : checker p l T), M { T' : TyTree & to_ty T'} with
+  forall (f : to_ty T), M { T : TyTree & to_ty T} :=
+  match T as T return forall (f : to_ty T), M { T' : TyTree & to_ty T'} with
   | tyTree_base X =>
-    fun f c =>
+    fun f =>
       print "lift: base";;
-      mmatch existT (fun X : Type => (to_ty (tyTree_base X)) *m
-                                  checker p l (tyTree_base X) *m ArgsOf m)
-                    X
-                    (m: f, c, U)
+      mmatch existT (fun X : Type => to_ty (tyTree_base X)) X f
       return M { T' : TyTree & to_ty T'} with
       | _ => ret (existT (fun X : TyTree => to_ty X) (tyTree_base X) f)
       end
   | tyTree_M X =>
-    fun f c =>
+    fun f =>
       print "lift: M";;
-      mmatch existT (fun X : Type => (to_ty (tyTree_M X)) *m
-                                     checker p l (tyTree_M X))
-                    X
-                    (m: f, c)
+      mmatch existT (fun X : Type => to_ty (tyTree_M X)) X f
       return M { T' : TyTree & to_ty T'} with
-      | [? (A : MTele_Ty m) f c]
-        existT (fun X : Type => (to_ty (tyTree_M X) *m checker p l (tyTree_M X)))
+      | [? (A : MTele_Ty m) f]
+        existT (fun X : Type => to_ty (tyTree_M X))
                (apply_sort A U)
-               (m: f, c) =>
+               f =>
           print "T:";;
           print_term (to_ty T);;
           print "f:";;
@@ -353,7 +347,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
         ret (existT (fun X : TyTree => to_ty X) (tyTree_MFA T) f')
       end
   | tyTree_imp X Y =>
-    fun f c =>
+    fun f =>
       print "lift: imp";;
       print "X on imp:";;
       print_term X;;
@@ -369,7 +363,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
             let G := (F (uncurry_in_acc U)) -> to_ty Y in
             match eq_sym e in _ = T return (T -> to_ty Y) -> M _ with
             | eq_refl => fun f : G =>
-              ''(existT _ Y' f) <- lift m U p false (Y) (f (uncurry_in (s:=SType) F x U)) (proj2 c);
+              ''(existT _ Y' f) <- lift m U p false (Y) (f (uncurry_in (s:=SType) F x U));
               f <- abs_fun x f;
               print "survive1";;
               ret (existT to_ty
@@ -382,28 +376,26 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       else
         (* Because X does not contain monadic stuff it's assumed it's "final" *)
         \nu x : to_ty X,
-          ''(existT _ Y' f) <- lift m U p false (Y) (f x) (proj2 c);
+          ''(existT _ Y' f) <- lift m U p false (Y) (f x);
           f <- abs_fun x f;
           ret (existT to_ty (tyTree_imp X Y') f)
   | tyTree_FA X F =>
-    fun f c =>
+    fun f =>
       print "lift: FA";;
       \nu x : X,
-       c' <- checker' p l (F x);
-       ''(existT _ F f) <- lift m U p l (F x) (f x) c';
+       ''(existT _ F f) <- lift m U p l (F x) (f x);
        F <- abs_fun x F;
        f <- coerce f;
        f <- abs_fun x f;
        ret (existT _ (tyTree_FA X F) (f))
   | tyTree_FAType F =>
-    fun f c =>
+    fun f =>
       print "lift: FAType";;
       \nu A : Type,
       b <- is_m (F A) A;
       if b then (* Replace A with a (RETURN A U) *)
         \nu A : MTele_Ty m,
-          let c' : checker p false (F (apply_sort A U)):= c (apply_sort A U) in
-          s <- lift m U p false (F (apply_sort A U)) (f (apply_sort A U)) c';
+          s <- lift m U p false (F (apply_sort A U)) (f (apply_sort A U));
           let '(existT _ T' f') := s in
           T'' <- abs_fun (P := fun A => TyTree) A T';
           f' <- coerce f';
@@ -415,8 +407,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
           print_term f'';;
           ret (existT to_ty T'' f'')
       else (* A is not monadic, no replacement *)
-        let c' : checker p false (F A) := c A in
-        s <- lift m U p false (F A) (f A) c';
+        s <- lift m U p false (F A) (f A);
         let '(existT _ T' f') := s in
         T'' <- abs_fun (P := fun A => TyTree) A T';
         f' <- coerce f';
@@ -427,7 +418,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
         print "f'':";;
         print_term f'';;
         ret (existT to_ty T'' f'')
-  | _ => fun _ _ =>
+  | _ => fun _ =>
     print_term T;;
     raise ShitHappens
   end.
@@ -436,8 +427,7 @@ Definition lift' {T : TyTree} (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} 
   fun (m : MTele) =>
   \nu U : ArgsOf m,
     c <- (checker' true false T);
-    lift m U true false T f c.
-
+    lift m U true false T f.
 
 (*** Examples *)
 
