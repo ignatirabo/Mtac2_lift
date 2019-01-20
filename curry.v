@@ -432,30 +432,31 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
     raise ShitHappens
   end.
 
-Definition lift' (T : TyTree) (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} :=
+Definition lift' {T : TyTree} (f : to_ty T) : MTele -> M {T : TyTree & to_ty T} :=
   fun (m : MTele) =>
   \nu U : ArgsOf m,
     c <- (checker' true false T);
     lift m U true false T f c.
+
 
 (*** Examples *)
 
 (** ret *)
 Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
 Let r : to_ty R := @ret.
-Definition mret : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' R r m; abs_fun m l)).
+Definition mret : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' r m; abs_fun m l)).
 Eval cbn in fun m => projT1 (mret m).
 
 (** random nat function *)
 Let T := tyTree_imp (tyTree_base nat) (tyTree_imp (tyTree_base nat) (tyTree_base nat)).
 Let t : to_ty T := @plus.
-Definition mplus : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T t m; abs_fun m l)).
+Definition mplus : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' t m; abs_fun m l)).
 Eval cbn in fun m => to_ty (projT1 (mplus m)).
 
 (** bind *)
 Let B := (tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_M A) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
 Let b : to_ty B := @bind.
-Definition mbind : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' B b m; abs_fun m l)).
+Definition mbind : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' b m; abs_fun m l)).
 Eval cbn in fun m => to_ty (projT1 (mbind m)).
 
 (** mtry' *)
@@ -504,15 +505,17 @@ Eval cbn in fun m => to_ty (projT1 (mnu_let m)).
 (* Calling lift_in makes it so that U is still used and then it's never abstracted *)
 Let T_abs : TyTree := tyTree_FAType (fun A => tyTree_FA (A -> Type) (fun P : A -> Type => tyTree_FA A (fun x => tyTree_imp (tyTree_base (P x)) (tyTree_M (forall x : A, P x))))).
 Let t_abs : to_ty T_abs := @abs_fun.
-Definition mabs_fun : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T_abs t_abs m; abs_fun m l)).
+Definition mabs_fun : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' t_abs m; abs_fun m l)).
 Eval cbn in fun m => to_ty (projT1 (mabs_fun m)).
 
 (** print *)
 (* Calling lift_in makes it so that U is still used and then it's never abstracted *)
 Let T_print : TyTree := tyTree_imp (tyTree_base (String.string)) (tyTree_M unit).
 Let t_print : to_ty T_print := @print.
-Definition mprint : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T_print t_print m; abs_fun m l)).
-Eval cbn in fun m => to_ty (projT1 (mprint m)).
+(* Definition mprint : MTele -> {T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' T_print t_print m; abs_fun m l)). *)
+Definition lift_print (m : MTele) : {T : TyTree & to_ty T} := ltac:(mrun (lift' t_print m)).
+Definition mprint m := projT2 (lift_print m).
+(* Eval cbn in fun m => to_ty (projT1 (mprint m)). *)
 
 (** Using MTeleMatch and lifted print *)
 (*
@@ -523,20 +526,23 @@ new_print : forall x : bool, String.string -> M unit
 The `forall x : bool` is added by lift with the telescope
 n := (mTele (fun b : bool => mBase))
 *)
+
+(*
 Definition test1 : forall x : bool, M unit :=
   mtmmatch true as b return forall x, M unit with
   | _ =>
-    projT2 (mprint (mTele (fun b : bool => mBase))) "MYPRINT"
+    projT2 (mprint (mTele (fun b : bool => mBase))) "MYPRINT3"
   end.
 
 Definition test1_run := ltac:(mrun (test1 true)).
+*)
 
 (*
 This is the same example without using mtmmatch because it really doesn't change anything
 We can check on the *coq* buffer for the message "[DEBUG] MYPRINT2"
 *)
 Definition test2 : forall x : bool, M unit :=
-    projT2 (mprint (mTele (fun b : bool => mBase))) "MYPRINT2".
+    mprint (mTele (fun b : bool => mBase)) "MYPRINT2".
 
 Definition test2_run := ltac:(mrun (test2 true)).
 
@@ -544,3 +550,27 @@ Definition test2_run := ltac:(mrun (test2 true)).
 - Typeclasses, builds the telescope to match the expected type. 
 - Notation to trigger Mtac 
 *)
+
+(* This is an example of the proble *)
+Fail Definition bla (T : Type) : T -> M {T' : Type & T'} :=
+  fun f =>
+    mmatch T return M {T' : Type & T'} with
+    | (bool:Type) => ret (existT (fun T : Type => T) (bool:Type) f)
+    | _ => ret (existT _ T f)
+    end.
+
+(* Not fixed yet *)
+Definition bla (T : Type) : T -> M {T' : Type & T'} :=
+  fun f =>
+    mmatch (existT (fun T : Type => T) T f) as T' return M {T : Type & T} with
+    | existT (fun T : Type => T) (bool:Type) f => ret (existT (fun T : Type => T) (bool:Type) f)
+    | _ => ret (existT _ T f)
+    end.
+
+Notation "'mlift' f m x .. z" := projT2 (lift' f m x .. z).
+  (
+    let F : RET_TY _ := Ret_Ty (fun y => T) in
+    let mt1 := M.eval (MTele_of (fun y => T)) in
+    let mt : MTY_OF := MTt_Of (fun _z => MTele_ty M (n:=mprojT1 (mt1 _z)) (mprojT2 (mt1 _z))) in
+    mtmmatch' F (fun y => mprojT1 (mt1 y)) (fun y => mprojT2 (mt1 y)) x p%with_mtpattern
+  ) (at level 90, p at level 91).
