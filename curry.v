@@ -44,7 +44,7 @@ Definition to_tree (X : Type) : M TyTree :=
     | [? T : Type] (M T):Type =>
       ret (tyTree_M T)
     | [? T R : Type] T -> R => (* no dependency of T on R. It's equivalent to forall _ : T, R *)
-      T <- rec T ;
+      T <- rec T;
       R <- rec R;
       ret (tyTree_imp T R)
     | [? F : Type -> Type] forall T : Type, F T =>
@@ -68,6 +68,41 @@ Definition to_tree (X : Type) : M TyTree :=
         F <- abs_fun t F;
         ret (tyTree_FATele p T F) (* fail *) *)
     end) X.
+
+(*
+Definition to_tree (X : Type) : M m:{ T : TyTree & (to_ty T) =m= X } :=
+  (mfix1 rec (X : Type) : M m:{ T : TyTree & (to_ty T) =m= X } :=
+    mmatch X as X return M m:{ T : TyTree & (to_ty T) =m= X } with
+    | [? T : Type] (M T):Type =>
+      ret (mexistT _ (tyTree_M T) meq_refl)
+    | [? T R : Type] T -> R => (* no dependency of T on R. It's equivalent to forall _ : T, R *)
+      ''(mexistT _ T ET) <- rec T;
+      ''(mexistT _ R ER) <- rec R;
+      ret (mexistT _ (tyTree_imp T R) _)
+    (*
+    | [? F : Type -> Type] forall T : Type, F T =>
+      \nu T : Type,
+        F <- rec (F T);
+        F <- abs_fun T F;
+        ret (tyTree_FAType F)
+    | [? T (F : forall t : T, Type)] forall t : T, F t =>
+      \nu t : T,
+        F <- rec (F t);
+        F <- abs_fun t F;
+        ret (tyTree_FA T F)
+    | _ => ret (tyTree_base X)
+    (* | [? (m : MTele) (T : MTele_Ty m)] MTele_val T =>
+       ret (tyTree_val p T) (* fail *) *)
+    (* | [? (m : MTele) (T : MTele_Ty m)] (MFA T):Type =>
+      ret (tyTree_MFA T) (* fail *) *)
+    (* | [? (m : MTele) (T : MTele_Ty m) (F : forall x : MTele_val T, Type)] forall T , F T =>
+      \nu t : _,
+        F <- rec (F t) p;
+        F <- abs_fun t F;
+        ret (tyTree_FATele p T F) (* fail *) *)
+    *)
+    end) X.
+*)
 
 Definition to_tree' {X : Type} (x : X) := to_tree X.
 
@@ -656,6 +691,7 @@ Definition MTele_of (A : Type) (B : Type -> Type)
     ok n mT
   end.
 
+(*
 Definition MMTele_of (A : Type) (nB : Type -> MTele) (B : forall A' : Type, MTele_Ty (nB A))
   (ok : forall (n : MTele) (A' : MTele_Ty n), MFA (B (MFA A'))) : MFA (B A) :=
   ''(existT _ n (existT _ mT E)) <- MTele_of' A;
@@ -663,26 +699,26 @@ Definition MMTele_of (A : Type) (nB : Type -> MTele) (B : forall A' : Type, MTel
   | meq_refl => 
     ok n mT
   end.
+*)
 
-Class BLA (A : Type) (a : A) := Bla { bla_t : Type ; bla_v : bla_t }.
+Class BLA (A : Type) (a : A) (bla_t : Type) := Bla { bla_v : bla_t }.
 
 Definition NotSameType : Exception. exact exception. Qed.
 
-
-Definition myhint (A : Type) (a : A) : M (BLA A a):=
+Definition myhint (A : Type) (a : A) (R : Type) : M (BLA A a R):=
   print "myhint is running";;
-  ''(mexistT _ n A) <- (MTele_of A);
-  A' <- to_tree (MTele_val A);
+  ''(existT _ n _) <- (MTele_of' R);
+  A' <- to_tree A;
   op <- unify A (to_ty A') UniCoq;
   match op with
   | mNone => raise NotSameType
   | mSome E =>
-    match meq_sym E in _ =m= R return forall a : R, M (BLA R a) with
-    | meq_refl => fun v : (to_ty A') =>
+    match meq_sym E in _ =m= T return forall a : T, M (BLA T a R) with
+    | meq_refl => fun a' : (to_ty A') =>
       (* let pack := mexistT to_ty A' v in *)
-      ''(mexistT _ T v) <- @lift' A' v _;
+      ''(mexistT _ T t) <- @lift' A' a' n;
       (* ret (Bla A a (to_ty A') v) *)
-      ret _
+      ret (Bla (to_ty A') a' (to_ty T) t)
     end a
   end.
   (* ''(existT _ T v) <- lift' a n; *)
@@ -690,25 +726,11 @@ Definition myhint (A : Type) (a : A) : M (BLA A a):=
   (* ''(existT _ T v) <- lift' a n; *)
   (* ret v. *)
 
-Hint Extern 0 (@BLA ?A ?a) => mrun (
-  print "myhint is running";;
-  ''(mexistT _ n _) <- (MTele_of A);
-  A' <- to_tree A;
-  op <- unify A (to_ty A') UniCoq;
-  match op with
-  | mNone => raise NotSameType
-  | mSome E =>
-    match meq_sym E in _ =m= R return forall a : R, M (BLA R a) with
-    | meq_refl => fun v : (to_ty A') =>
-      let pack := mexistT to_ty A' v in
-      ''(mexistT _ T v) <- @lift' A' v n;
-      ret (Bla A a (to_ty A') v)
-    end a
-  end) : typeclass_instances.
+Hint Extern 0 (@BLA ?A ?a ?R) => mrun (myhint A a R) : typeclass_instances.
 
 Notation "'mlift' f" :=
   (
-    let B : BLA _ f := _ in
+    let B : BLA _ f _ := _ in
     @bla_v _ f B
   ) (at level 90,
      format "mlift f").
