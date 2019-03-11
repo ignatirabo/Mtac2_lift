@@ -38,6 +38,7 @@ Fixpoint to_ty (X : TyTree) : Type :=
   | tyTree_base T => T
   end.
 
+
 Definition to_tree (X : Type) : M TyTree :=
   (mfix1 rec (X : Type) : M TyTree :=
     mmatch X as X return M TyTree with
@@ -69,27 +70,53 @@ Definition to_tree (X : Type) : M TyTree :=
         ret (tyTree_FATele p T F) (* fail *) *)
     end) X.
 
+
+Definition NotEqualTree : Exception. exact exception. Qed.
+
+Definition tytree_imp_eq : forall (L R : Type) (L' R' : TyTree) (EL : L =m= to_ty L') (ER : R =m= to_ty R'), (L -> R) =m= (to_ty (tyTree_imp L' R')).
+Proof.
+  intros. rewrite EL. rewrite ER. simpl. reflexivity.
+Defined.
+
 (*
-Definition to_tree (X : Type) : M m:{ T : TyTree & (to_ty T) =m= X } :=
-  (mfix1 rec (X : Type) : M m:{ T : TyTree & (to_ty T) =m= X } :=
-    mmatch X as X return M m:{ T : TyTree & (to_ty T) =m= X } with
+Definition tytree_fa_eq : forall (T : Type) (F : T -> Type) (F' : TyTree) (EF : F =m= to_ty F'), (forall t : T, F t) =m= (to_ty ) 
+*)
+
+(*
+Definition tytree_fat_eq : forall (T : Type) (F : Type -> Type) (F' : TyTree) (F'' : Type -> TyTree) (EF : F T =m= to_ty F') (EF' : F' =m= F'' T), F T =m= (to_ty (F'' T)).
+Proof.
+  intros. rewrite EF. rewrite EF'. reflexivity.
+
+Definition abs_fun_eq: forall{A: Type} {P: A->Type} (x: A) (t: P x),
+  M m:{t': forall x, P x & t' x =m= t}.
+  constructor. Qed.
+
+Program Definition to_tree (X : Type) : M m:{ T : TyTree & X =m= (to_ty T) } :=
+  (mfix1 rec (X : Type) : M m:{ T : TyTree & X =m= (to_ty T) } :=
+    mmatch X as X return M m:{ T : TyTree & X =m= (to_ty T) } with
     | [? T : Type] (M T):Type =>
       ret (mexistT _ (tyTree_M T) meq_refl)
-    | [? T R : Type] T -> R => (* no dependency of T on R. It's equivalent to forall _ : T, R *)
-      ''(mexistT _ T ET) <- rec T;
-      ''(mexistT _ R ER) <- rec R;
-      ret (mexistT _ (tyTree_imp T R) _)
+    | [? L R : Type] L -> R => 
+      ''(mexistT _ L' EL) <- rec L;
+      ''(mexistT _ R' ER) <- rec R;
+      let T : TyTree := (tyTree_imp L' R') in
+      let E := tytree_imp_eq L R L' R' EL ER in
+      ret (mexistT _ T E)
+    | [? T (F : forall t : T, Type)] forall t : T, F t =>
+      \nu t : T,
+        ''(mexistT _ F' EF) <- rec (F t);
+        ''(mexistT _ F'' EF') <- abs_fun_eq t F';
+        let E : (forall t : T, F t) =m= to_ty (tyTree_FA T F'') := _ in
+        ret (mexistT _ (tyTree_FA T F'') E)
     (*
     | [? F : Type -> Type] forall T : Type, F T =>
       \nu T : Type,
-        F <- rec (F T);
-        F <- abs_fun T F;
-        ret (tyTree_FAType F)
-    | [? T (F : forall t : T, Type)] forall t : T, F t =>
-      \nu t : T,
-        F <- rec (F t);
-        F <- abs_fun t F;
-        ret (tyTree_FA T F)
+        ''(mexistT _ F' EF) <- rec (F T);
+        F'' <- abs_fun T F';
+        let E : (forall T : Type, F T) =m= to_ty (tyTree_FAType F'') := _ in
+        ret (mexistT _ (tyTree_FAType F'') E)
+    *)
+    (*
     | _ => ret (tyTree_base X)
     (* | [? (m : MTele) (T : MTele_Ty m)] MTele_val T =>
        ret (tyTree_val p T) (* fail *) *)
@@ -102,7 +129,9 @@ Definition to_tree (X : Type) : M m:{ T : TyTree & (to_ty T) =m= X } :=
         ret (tyTree_FATele p T F) (* fail *) *)
     *)
     end) X.
+Next Obligation.
 *)
+
 
 Definition to_tree' {X : Type} (x : X) := to_tree X.
 
@@ -705,22 +734,38 @@ Class BLA (A : Type) (a : A) (bla_t : Type) := Bla { bla_v : bla_t }.
 
 Definition NotSameType : Exception. exact exception. Qed.
 
-Definition myhint (A : Type) (a : A) (R : Type) : M (BLA A a R):=
+Definition to_tree_eq A : M m:{T: TyTree & A =m= to_ty T} :=
+  T <- to_tree A;
+  r <- unify_or_fail UniCoq A (to_ty T);
+  ret (mexistT _ T r).
+
+Obligation Tactic := intros.
+
+Program Definition bla A (a: A) (A' : TyTree) (teq : A =m= to_ty A'):=
+  (* ''(mexistT _ A' teq) <- to_tree_eq A; *)
+  ret (mexistT _ A' (@lift' A' _)).
+Next Obligation.
+  rewrite <- teq.
+  exact a.
+Defined.
+
+Program Definition myhint (A : Type) (a : A) (R : Type) : M (BLA A a R):=
   print "myhint is running";;
   ''(existT _ n _) <- (MTele_of' R);
-  A' <- to_tree A;
-  op <- unify A (to_ty A') UniCoq;
-  match op with
-  | mNone => raise NotSameType
-  | mSome E =>
-    match meq_sym E in _ =m= T return forall a : T, M (BLA T a R) with
-    | meq_refl => fun a' : (to_ty A') =>
-      (* let pack := mexistT to_ty A' v in *)
-      ''(mexistT _ T t) <- @lift' A' a' n;
-      (* ret (Bla A a (to_ty A') v) *)
-      ret (Bla (to_ty A') a' (to_ty T) t)
-    end a
-  end.
+  ''(mexistT _ A' teq) <- to_tree_eq A;
+  bla _ a A' teq.
+ 
+  (* match meq_sym teq in _ =m= T return forall a : T, M (BLA T a R) with *)
+  (* | meq_refl => fun a' : (to_ty A') => *)
+  (*     (* let pack := mexistT to_ty A' v in *) *)
+  (*     ''(mexistT _ T' t') <- @lift' A' _ n; *)
+  (*     (* ret (Bla A a (to_ty A') v) *) *)
+  (*     ret _(* (Bla (to_ty A') a' (to_ty T) t) *) *)
+  (* end a. *)
+Next Obligation.
+Set Printing Universes.
+  refine (''(mexistT _ T t) <- @lift' A' _ n; _).
+  
   (* ''(existT _ T v) <- lift' a n; *)
   (* ret (Bla A a (to_ty T) v). *)
   (* ''(existT _ T v) <- lift' a n; *)
