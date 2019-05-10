@@ -507,8 +507,8 @@ Eval cbn in fun m => mprojT1 (m_mmatch' m).
 (** ret *)
 Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
 Let r : to_ty R := @ret.
-Definition mret : MTele -> m:{T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' r m; abs_fun m l)).
-Eval cbn in fun m => mprojT1 (mret m).
+Definition mret (m : MTele): m:{T : TyTree & to_ty T} := ltac:(mrun (lift' r m)).
+Eval cbn in fun m => mprojT2 (mret m).
 
 (** random nat function *)
 Let T := tyTree_imp (tyTree_base nat) (tyTree_imp (tyTree_base nat) (tyTree_base nat)).
@@ -585,7 +585,7 @@ Definition mprint m := mprojT2 (lift_print m).
 The type of print is
 print : String.string -> M unit
 With the lift function we generalize this type to
-new_print : forall x : bool, String.string -> M unit
+new_print : forall x : bool,/ String.string -> M unit
 The `forall x : bool` is added by lift with the telescope
 n := (mTele (fun b : bool => mBase))
 *)
@@ -676,20 +676,27 @@ Definition MTele_of (T : Type) : M ( m:{n : MTele & MTele_Ty n} ) :=
       end) T.
 *)
 
+(* Try to check what is actually done by MTele_of' *)
+(* Given a regular Coq Type T, return an MTele that represents the dependencies of T, an MTele_Ty mT of this telescope and a proof that T is equivalent to MFA mT *)
+(* This means T already has all the dependencies intended and can be expressed though an MFA. Specifically this function is to be applied to something like: forall x..z, M (T x..z) because that is a type that can be represented in an MFA'ish manner *)
+(* That also explains why only two cases are defined *)
 Definition MTele_of' (T : Type) : M { m : MTele & { mT : MTele_Ty m & T =m= MFA mT } }:=
   (mfix1 f (T : Type) : M { m : MTele & { mT : MTele_Ty m & T =m= MFA mT } } :=
   mmatch T as T0 return M { m : MTele & { mT : MTele_Ty m & T =m= MFA mT } } with
-   | [?X : Type] (M X):Type =u> [H]
-     ret (existT (fun m => {mT : MTele_Ty m & T =m= MFA mT}) (mBase)
-         (existT (fun mT : MTele_Ty mBase => T =m= MFA mT) _ H))
-   | [?(X : Type) (F : forall x:X, Type)] (forall x:X, F x) =c> [H]
-     \nu x,
-       ''(existT _ m (existT _ mT E)) <- f (F x);
-       m' <- abs_fun x m;
-       mT' <- (coerce mT >>= abs_fun (P:=fun x => MTele_Ty (m' x)) x);
-       E' <- coerce (@meq_refl _ (MFA (n:=mTele m') mT'));
-       ret (existT _ (mTele m') (existT _ mT' E'))
-   end) T.
+  | [?X : Type] (M X):Type =u> [H]
+    ret (existT (fun m => {mT : MTele_Ty m & T =m= MFA mT}) (mBase)
+        (existT (fun mT : MTele_Ty mBase => T =m= MFA mT) _ H))
+  | [?(X : Type) (F : forall x:X, Type)] (forall x:X, F x) =c> [H]
+    \nu x,
+      ''(existT _ m (existT _ mT E)) <- f (F x);
+      m' <- abs_fun x m;
+      mT' <- (coerce mT >>= abs_fun (P:=fun x => MTele_Ty (m' x)) x);
+      E' <- coerce (@meq_refl _ (MFA (n:=mTele m') mT'));
+      ret (existT _ (mTele m') (existT _ mT' E'))
+  end) T.
+
+Definition test_mteleof := fun (Y : Type) (X : Y -> Type) (y : Y) => ltac:(mrun (MTele_of' (M (X y)))).
+Eval cbn in test_mteleof.
 
 (* I should raise exceptions when something's wrong *)
 (*
@@ -734,6 +741,7 @@ Class BLA (A : Type) (a : A) (bla_t : Type) := Bla { bla_v : bla_t }.
 
 Definition NotSameType : Exception. exact exception. Qed.
 
+(*
 Definition to_tree_eq A : M m:{T: TyTree & A =m= to_ty T} :=
   T <- to_tree A;
   r <- unify_or_fail UniCoq A (to_ty T);
@@ -770,14 +778,46 @@ Set Printing Universes.
   (* ret (Bla A a (to_ty T) v). *)
   (* ''(existT _ T v) <- lift' a n; *)
   (* ret v. *)
+*)
+
+Definition to_tree_eq A : M m:{T: TyTree & _} :=
+  T <- to_tree A;
+  r <- unify_univ A (to_ty T) UniCoq;
+  match r with mSome f => ret (mexistT _ T f) | mNone => failwith "pumba" end.
+
+Obligation Tactic := intros.
+
+Definition myhint (A : Type) (a : A) (R : Type) : M (BLA A a R):=
+  mtry
+  print "myhint is running";;
+  M.dbg_term "R: " R;;
+  M.dbg_term "A: " A;;
+  ''(existT _ n _) <- (MTele_of' R);
+  M.dbg_term "n: " n;;
+  ''(mexistT _ A' f) <- to_tree_eq A;
+  M.dbg_term "f: " f;;
+  ''(mexistT _ T t) <- @lift' A' (f a) n;
+  M.dbg_term "T: " T;;
+  M.dbg_term "t: " t;;
+  r <- unify R (to_ty T) UniCoq;
+  match r with
+  | mNone => raise NotSameType
+  | mSome eq =>
+    match meq_sym eq in _ =m= R' return forall r : to_ty T, M (BLA A a R') with
+    | meq_refl => fun t' =>
+      ret (Bla A a (to_ty T) t')
+    end t
+  end
+  with [? e] e => dbg_term "fallo por: " e;; raise e end.
+
+
 
 Hint Extern 0 (@BLA ?A ?a ?R) => mrun (myhint A a R) : typeclass_instances.
 
 Notation "'mlift' f" :=
   (
-    let B : BLA _ f _ := _ in
-    @bla_v _ f B
+    @bla_v _ f _ _
   ) (at level 90,
      format "mlift f").
 
-Definition test3 := mlift (@print_term nat). 
+Definition test3 : nat -> M nat := mlift (@print_term nat). 
