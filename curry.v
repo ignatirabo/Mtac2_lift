@@ -317,6 +317,9 @@ Definition is_m (T : TyTree) (A : Type) : M bool :=
   | _ => ret false
   end) T.
 
+(* This function is used to determine if a TyTree contains a mention of an element U *)
+(* The idea is to abstract and if the abstraction fails, it means that U is in T *)
+(* It's a hack Janno figured we could use *)
 Definition contains_u (m : MTele) (U : ArgsOf m) (T : TyTree) : M bool :=
   mtry
     T' <- abs_fun U T;
@@ -346,10 +349,13 @@ Let now_val {m} (U : ArgsOf m) :=
   fun (s' : Sort) (ms : MTele_Sort s' m) (mv : MTele_val ms) => uncurry_val mv U.
 *)
 
+(* This is a new type that helps organize the code *)
+(* I don't know if there is some kind of intuition *)
 Definition lift_inR {m} (T : TyTree) (A : accessor m):=
   m:{F : (accessor m -> SType) & (to_ty T = F A)}.
 
 
+(* This function is an auxiliary function called by lift. It is only used for tyTree_imp *)
 Definition lift_in {m : MTele} (U : ArgsOf m) (T : TyTree)
                  (p l : bool) :
                  M (lift_inR T (uncurry_in_acc U)) :=
@@ -387,7 +393,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       print "lift: base";;
       mmatch mexistT (fun X : Type => to_ty (tyTree_base X)) X f
       return M m:{ T' : TyTree & to_ty T'} with
-      | _ => ret (mexistT (fun X : TyTree => to_ty X) (tyTree_base X) f)
+      | _ => ret (mexistT (fun Y : TyTree => to_ty Y) (tyTree_base X) f)
       end
   | tyTree_M X =>
     fun f =>
@@ -396,8 +402,8 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       return M m:{ T' : TyTree & to_ty T'} with
       | [? (A : MTele_Ty m) f]
         mexistT (fun X : Type => to_ty (tyTree_M X))
-               (apply_sort A U)
-               f =>
+                (apply_sort A U)
+                f =>
           print "T:";;
           print_term (to_ty T);;
           print "f:";;
@@ -461,6 +467,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       b <- is_m (F A) A;
       if b then (* Replace A with a (RETURN A U) *)
         \nu A : MTele_Ty m,
+          (* I use apply_sort A U to uncurry the values *)
           s <- lift m U p false (F (apply_sort A U)) (f (apply_sort A U));
           let '(mexistT _ T' f') := s in
           T'' <- abs_fun (P := fun A => TyTree) A T';
@@ -508,7 +515,7 @@ Eval cbn in fun m => mprojT1 (m_mmatch' m).
 Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
 Let r : to_ty R := @ret.
 Definition mret (m : MTele): m:{T : TyTree & to_ty T} := ltac:(mrun (lift' r m)).
-Eval cbn in fun m => mprojT2 (mret m).
+Eval cbn in fun m => to_ty (mprojT1 (mret m)).
 
 (** random nat function *)
 Let T := tyTree_imp (tyTree_base nat) (tyTree_imp (tyTree_base nat) (tyTree_base nat)).
