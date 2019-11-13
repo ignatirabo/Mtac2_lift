@@ -391,10 +391,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
   | tyTree_base X =>
     fun f =>
       print "lift: base";;
-      mmatch mexistT (fun X : Type => to_ty (tyTree_base X)) X f
-      return M m:{ T' : TyTree & to_ty T'} with
-      | _ => ret (mexistT (fun Y : TyTree => to_ty Y) (tyTree_base X) f)
-      end
+      ret (mexistT (fun Y : TyTree => to_ty Y) (tyTree_base X) f)
   | tyTree_M X =>
     fun f =>
       print "lift: M";;
