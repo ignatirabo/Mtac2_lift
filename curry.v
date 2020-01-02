@@ -416,6 +416,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
         ret (mexistT (fun X : TyTree => to_ty X) (tyTree_MFA T) f')
       end
   | tyTree_imp X Y =>
+    (* print "hola";; *)
     fun f =>
       print "lift: imp";;
       print "X on imp:";;
@@ -523,8 +524,8 @@ Eval cbn in fun m => to_ty (mprojT1 (mplus m)).
 (** bind *)
 Let B := (tyTree_FAType (fun A => tyTree_FAType (fun B => tyTree_imp (tyTree_M A) (tyTree_imp (tyTree_imp (tyTree_base A) (tyTree_M B)) (tyTree_M B))))).
 Let b : to_ty B := @bind.
-Definition mbind : MTele -> m:{T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' b m; abs_fun m l)).
-Eval cbn in fun m => to_ty (mprojT1 (mbind m)).
+Definition l_bind : MTele -> m:{T : TyTree & to_ty T} := ltac:(mrun (\nu m : MTele, l <- lift' b m; abs_fun m l)).
+Eval cbn in fun m => to_ty (mprojT1 (l_bind m)).
 
 (** mtry' *)
 (*
@@ -824,4 +825,44 @@ Notation "'mlift' f" :=
   ) (at level 90,
      format "mlift f").
 
-Definition test3 : nat -> M nat := mlift (@print_term nat). 
+(* Definition test3 : nat -> M nat := mlift (@print_term nat).  *)
+
+(* Intento de usar lift para gran ejemplo *)
+(*
+Definition mytele := fun (S : Set) => mTele (fun (l : list S) => mTele (fun (p : l <> nil) => mBase)).
+Eval cbn in (mprojT2 (l_bind (mytele nat))).
+Eval cbn in (mprojT1 (l_bind (mytele nat))).
+
+Definition max (S: Set) : M (S -> S -> S) :=
+  mmatch S in Set as S' return M (S' -> S' -> S') with
+  | nat => M.ret Nat.max
+  end.
+
+Let l_bind_test := fun S : Set => mprojT2 (l_bind (mytele S)).
+
+Definition list_max (S: Set) :=
+  l_bind_test S _ _ (fun _ => fun _ => max S) (mfix f (l: list S) : l' <> nil -> M S :=
+    mtmmatch l as l' return l' <> nil -> M S with
+    | [? e] [e] =m> fun nonE=>M.ret e
+    | [? e1 e2 l'] (e1 :: e2 :: l') =m> fun nonE =>
+      m <- max e1 e2;
+      f (m :: l') cons_not_nil
+    end).
+ *)
+
+
+Definition mytele := mTele (fun _ : nat => mBase).
+Eval cbn in to_ty (mprojT1 (l_bind mytele)).
+Eval cbn in (mprojT2 (l_bind mytele)).
+
+Let lbn := (mprojT2 (l_bind mytele)).
+
+Definition print_test : forall (n : nat), M nat :=
+  lbn (fun _ => M unit) (fun _ => M nat) (fun _ : nat => ret (print "print1"))
+      (fun n : nat => fun p : M unit => ret n).
+
+Definition print_test : forall (P : nat -> Type) (n : nat) (p : P n), M (P n) :=
+  mbind ()print "error";;
+  fun P n p =>
+    print "hola";;
+    ret p.
