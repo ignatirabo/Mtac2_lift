@@ -7,7 +7,7 @@ Set Universe Polymorphism.
 Unset Universe Minimization ToSet.
 Unset Printing Universes.
 
-Local Definition MFA {n} (T : MTele_Ty n) := (MTele_val (MTele_C SType SProp M T)).
+Local Definition MFA {n} (T : MTele_Ty n) := (MTele_val (MTele_C Type_sort Prop_sort M T)).
 Local Notation InF s n := (forall now_ty : forall s0 : Sort, MTele_Sort s0 n -> s0, (forall (s0 : Sort) (T : MTele_Sort s0 n), MTele_val T -> now_ty s0 T) -> s).
 
 (* If recursion is needed then it's TyTree, if not only Type *)
@@ -274,13 +274,13 @@ Fixpoint MTele_Cs {s : Sort} (n : MTele) (T : s) : MTele_Sort s n :=
     fun x : X => @MTele_Cs s (F x) T
   end.
 
-Fixpoint MTele_cs {s : Sort} {n : MTele} {X : Type} (f : M X) : MFA (@MTele_Cs SType n X) :=
-  match n as n return MFA (@MTele_Cs SType n X) with
+Fixpoint MTele_cs {s : Sort} {n : MTele} {X : Type} (f : M X) : MFA (@MTele_Cs Type_sort n X) :=
+  match n as n return MFA (@MTele_Cs Type_sort n X) with
   | mBase =>
     f
   | @mTele Y F =>
     (* Fun (fun x : X => @MTele_cs _ (F x) _ f) *)
-    @Fun SType Y (fun y : Y => MFA (@MTele_Cs SType (F y) X)) (fun y : Y => @MTele_cs s (F y) X f)
+    @Fun Type_sort Y (fun y : Y => MFA (@MTele_Cs Type_sort (F y) X)) (fun y : Y => @MTele_cs s (F y) X f)
     (* ltac:(simpl in *; refine (@Fun s X (fun x => MTele_val (@MTele_Cs _ (F x) T)) (fun x : X => @MTele_cs _ (F x) T f))) *)
   end.
 
@@ -352,7 +352,7 @@ Let now_val {m} (U : ArgsOf m) :=
 (* This is a new type that helps organize the code *)
 (* I don't know if there is some kind of intuition *)
 Definition lift_inR {m} (T : TyTree) (A : accessor m):=
-  m:{F : (accessor m -> SType) & (to_ty T = F A)}.
+  m:{F : (accessor m -> Type_sort) & (to_ty T = F A)}.
 
 
 (* This function is an auxiliary function called by lift. It is only used for tyTree_imp *)
@@ -373,8 +373,8 @@ Definition lift_in {m : MTele} (U : ArgsOf m) (T : TyTree)
       ret (mexistT _ F eq_p)
     | [? X Y] tyTree_imp X Y =>
       print "lift_in: imp";;
-      ''(mexistT _ FX pX) <- f X (negb p) true;
-      ''(mexistT _ FY pY) <- f Y p false;
+      '(mexistT _ FX pX) <- f X (negb p) true;
+      '(mexistT _ FY pY) <- f Y p false;
       let F := fun a => FX a -> FY a in
       let eq_p : to_ty (tyTree_imp X Y) = F (uncurry_in_acc U) :=
         ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
@@ -411,8 +411,8 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
           ret (mexistT _ (tyTree_MFA A) f)
       | _ =>
         (* Constant case *)
-        let T := @MTele_Cs SType m X in (* okay *)
-        let f' := @MTele_cs SType m X f in
+        let T := @MTele_Cs Type_sort m X in (* okay *)
+        let f' := @MTele_cs Type_sort m X f in
         ret (mexistT (fun X : TyTree => to_ty X) (tyTree_MFA T) f')
       end
   | tyTree_imp X Y =>
@@ -426,18 +426,18 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       print_term b;;
       if b then
         mtry
-          (''(mexistT _ F e) <- lift_in U X (negb p) true;
-          \nu x : MTele_val (MTele_In SType F),
+          ('(mexistT _ F e) <- lift_in U X (negb p) true;
+          \nu x : MTele_val (MTele_In Type_sort F),
             (* ltac:(rewrite e in f; exact (f (uncurry_in (s:=SType) F x U))) *)
             (* lift on right side Y *)
             let G := (F (uncurry_in_acc U)) -> to_ty Y in
             match eq_sym e in _ = T return (T -> to_ty Y) -> M _ with
             | eq_refl => fun f =>
-              ''(mexistT _ Y' f) <- lift m U p false (Y) (f (uncurry_in (s:=SType) F x U));
+              '(mexistT _ Y' f) <- lift m U p false (Y) (f (uncurry_in (s:=Type_sort) F x U));
               f <- abs_fun x f;
               print "survive1";;
               ret (mexistT to_ty
-                  (tyTree_imp (tyTree_In SType F) Y')
+                  (tyTree_imp (tyTree_In Type_sort F) Y')
                   f)
             end f)
         with UnLiftInCase =>
@@ -446,14 +446,14 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       else
         (* Because X does not contain monadic stuff it's assumed it's "final" *)
         \nu x : to_ty X,
-          ''(mexistT _ Y' f) <- lift m U p false (Y) (f x);
+          '(mexistT _ Y' f) <- lift m U p false (Y) (f x);
           f <- abs_fun x f;
           ret (mexistT to_ty (tyTree_imp X Y') f)
   | tyTree_FA X F =>
     fun f =>
       print "lift: FA";;
       \nu x : X,
-       ''(mexistT _ F f) <- lift m U p l (F x) (f x);
+       '(mexistT _ F f) <- lift m U p l (F x) (f x);
        F <- abs_fun x F;
        f <- coerce f;
        f <- abs_fun x f;
@@ -693,7 +693,7 @@ Definition MTele_of' (T : Type) : M { m : MTele & { mT : MTele_Ty m & T =m= MFA 
         (existT (fun mT : MTele_Ty mBase => T =m= MFA mT) _ H))
   | [?(X : Type) (F : forall x:X, Type)] (forall x:X, F x) =c> [H]
     \nu x,
-      ''(existT _ m (existT _ mT E)) <- f (F x);
+      '(existT _ m (existT _ mT E)) <- f (F x);
       m' <- abs_fun x m;
       mT' <- (coerce mT >>= abs_fun (P:=fun x => MTele_Ty (m' x)) x);
       E' <- coerce (@meq_refl _ (MFA (n:=mTele m') mT'));
@@ -726,7 +726,7 @@ Definition MTele_of (A : Type) (B : Type -> Type)
 
 Definition MTele_of (A : Type) (B : Type -> Type)
   (ok : forall (n : MTele) (A' : MTele_Ty n), M (B (MFA A'))) : M (B A) :=
-  ''(existT _ n (existT _ mT E)) <- MTele_of' A;
+  '(existT _ n (existT _ mT E)) <- MTele_of' A;
   match meq_sym E in _ =m= R return M (B R) with
   | meq_refl => 
     ok n mT
@@ -797,11 +797,11 @@ Definition myhint (A : Type) (a : A) (R : Type) : M (BLA A a R):=
   print "myhint is running";;
   M.dbg_term "R: " R;;
   M.dbg_term "A: " A;;
-  ''(existT _ n _) <- (MTele_of' R);
+  '(existT _ n _) <- (MTele_of' R);
   M.dbg_term "n: " n;;
-  ''(mexistT _ A' f) <- to_tree_eq A;
+  '(mexistT _ A' f) <- to_tree_eq A;
   M.dbg_term "f: " f;;
-  ''(mexistT _ T t) <- @lift' A' (f a) n;
+  '(mexistT _ T t) <- @lift' A' (f a) n;
   M.dbg_term "T: " T;;
   M.dbg_term "t: " t;;
   r <- unify R (to_ty T) UniCoq;
@@ -856,13 +856,3 @@ Eval cbn in to_ty (mprojT1 (l_bind mytele)).
 Eval cbn in (mprojT2 (l_bind mytele)).
 
 Let lbn := (mprojT2 (l_bind mytele)).
-
-Definition print_test : forall (n : nat), M nat :=
-  lbn (fun _ => M unit) (fun _ => M nat) (fun _ : nat => ret (print "print1"))
-      (fun n : nat => fun p : M unit => ret n).
-
-Definition print_test : forall (P : nat -> Type) (n : nat) (p : P n), M (P n) :=
-  mbind ()print "error";;
-  fun P n p =>
-    print "hola";;
-    ret p.
