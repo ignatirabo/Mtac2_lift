@@ -17,8 +17,8 @@ Inductive TyTree : Type :=
 | tyTree_MFA {m : MTele} (T : MTele_Ty m) : TyTree
 | tyTree_In (s : Sort) {m : MTele} (F : accessor m -> s) : TyTree
 | tyTree_imp (T : TyTree) (R : TyTree) : TyTree
-| tyTree_FATele {m : MTele} (T : MTele_Ty m) (F : forall t : MTele_val T, TyTree) : TyTree
-| tyTree_FATele1 (m : MTele) (F : forall (T : MTele_Ty m), TyTree) : TyTree
+| tyTree_FATele {m : MTele} (T : MTele_Ty m) (F : MTele_val T -> TyTree) : TyTree
+| tyTree_FATele1 (m : MTele) (F : MTele_Ty m -> TyTree) : TyTree
 | tyTree_FAValue (T : Type) (F : T -> TyTree) : TyTree
 | tyTree_FAType (F : Type -> TyTree) : TyTree
 | tyTree_base (T : Type) : TyTree
@@ -513,7 +513,7 @@ Eval cbn in fun m => mprojT1 (m_mmatch' m).
 Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
 Let r : to_ty R := @ret.
 Definition l_ret (m : MTele): m:{T : TyTree & to_ty T} := ltac:(mrun (lift' r m)).
-Eval cbn in fun m => to_ty (mprojT1 (l_ret m)).
+Eval cbn in fun m => (mprojT1 (l_ret m)).
 
 (** random nat function *)
 Let T' := tyTree_imp (tyTree_base nat) (tyTree_imp (tyTree_base nat) (tyTree_base nat)).
