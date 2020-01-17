@@ -382,7 +382,6 @@ Definition lift_in {m : MTele} (U : ArgsOf m) (T : TyTree)
     end) T p l.
 
 (*** Lift section *)
-
 (* p and l represent "polarity" and "left part of implication" *)
 Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
   forall (f : to_ty T), M m:{ T : TyTree & to_ty T} :=
@@ -465,6 +464,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       if b then (* Replace A with a (RETURN A U) *)
         \nu A : MTele_Ty m,
           (* I use apply_sort A U to uncurry the values *)
+          (* apply_sort A U is just forall x y z, A z x y *)
           s <- lift m U p false (F (apply_sort A U)) (f (apply_sort A U));
           let '(mexistT _ T' f') := s in
           T'' <- abs_fun (P := fun A => TyTree) A T';
@@ -513,7 +513,9 @@ Eval cbn in fun m => mprojT1 (m_mmatch' m).
 Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
 Let r : to_ty R := @ret.
 Definition l_ret (m : MTele): m:{T : TyTree & to_ty T} := ltac:(mrun (lift' r m)).
-Eval cbn in fun m => (mprojT1 (l_ret m)).
+Definition tele_ex := fun T_1 T_2 T_3 => mTele (fun t_1 : T_1 => mTele (fun t_2 : T_2 => mTele (fun t_3 : T_3 => mBase))).
+Eval cbn in fun T_1 T_2 T_3 => to_ty (mprojT1 (l_ret (tele_ex T_1 T_2 T_3))).
+Eval cbn in fun T_1 T_2 T_3 => (mprojT2 (l_ret (tele_ex T_1 T_2 T_3))).
 
 (** random nat function *)
 Let T' := tyTree_imp (tyTree_base nat) (tyTree_imp (tyTree_base nat) (tyTree_base nat)).
