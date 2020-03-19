@@ -355,10 +355,9 @@ Definition lift_inR {m} (T : TyTree) (A : accessor m):=
 
 
 (* This function is an auxiliary function called by lift. It is only used for tyTree_imp *)
-Definition lift_in {m : MTele} (U : ArgsOf m) (T : TyTree)
-                 (p l : bool) :
+Definition lift_in {m : MTele} (U : ArgsOf m) (T : TyTree) :
                  M (lift_inR T (uncurry_in_acc U)) :=
-  (mfix3 f (T : TyTree) (p l : bool) : M (lift_inR T (uncurry_in_acc U)) :=
+  (mfix1 f (T : TyTree) : M (lift_inR T (uncurry_in_acc U)) :=
     mmatch T as e return M (lift_inR e _) with
     | [? (A : MTele_Ty m)] tyTree_base (apply_sort A U) =>
       print "lift_in: base";;
@@ -372,18 +371,18 @@ Definition lift_in {m : MTele} (U : ArgsOf m) (T : TyTree)
       ret (mexistT _ F eq_p)
     | [? X Y] tyTree_imp X Y =>
       print "lift_in: imp";;
-      '(mexistT _ FX pX) <- f X (negb p) true;
-      '(mexistT _ FY pY) <- f Y p false;
+      '(mexistT _ FX pX) <- f X;
+      '(mexistT _ FY pY) <- f Y;
       let F := fun a => FX a -> FY a in
       let eq_p : to_ty (tyTree_imp X Y) = F (uncurry_in_acc U) :=
         ltac:(simpl in *; rewrite pX, pY; refine eq_refl) in
       ret (mexistT _ F eq_p)
     | _ => raise UnLiftInCase
-    end) T p l.
+    end) T.
 
 (*** Lift section *)
 (* p and l represent "polarity" and "left part of implication" *)
-Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
+Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (T : TyTree) :
   forall (f : to_ty T), M m:{ T : TyTree & to_ty T} :=
   match T as T return forall (f : to_ty T), M m:{ T' : TyTree & to_ty T'} with
   | tyTree_base X =>
@@ -424,14 +423,14 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       print_term b;;
       if b then
         mtry
-          ('(mexistT _ F e) <- lift_in U X (negb p) true;
+          ('(mexistT _ F e) <- lift_in U X;
           \nu x : MTele_val (MTele_In Type_sort F),
             (* ltac:(rewrite e in f; exact (f (uncurry_in (s:=SType) F x U))) *)
             (* lift on right side Y *)
             let G := (F (uncurry_in_acc U)) -> to_ty Y in
             match eq_sym e in _ = T return (T -> to_ty Y) -> M _ with
             | eq_refl => fun f =>
-              '(mexistT _ Y' f) <- lift m U p false (Y) (f (uncurry_in (s:=Type_sort) F x U));
+              '(mexistT _ Y' f) <- lift m U (Y) (f (uncurry_in (s:=Type_sort) F x U));
               f <- abs_fun x f;
               print "survive1";;
               ret (mexistT to_ty
@@ -444,14 +443,14 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       else
         (* Because X does not contain monadic stuff it's assumed it's "final" *)
         \nu x : to_ty X,
-          '(mexistT _ Y' f) <- lift m U p false (Y) (f x);
+          '(mexistT _ Y' f) <- lift m U (Y) (f x);
           f <- abs_fun x f;
           ret (mexistT to_ty (tyTree_imp X Y') f)
   | tyTree_FAVal X F =>
     fun f =>
       print "lift: FA";;
       \nu x : X,
-       '(mexistT _ F f) <- lift m U p l (F x) (f x);
+       '(mexistT _ F f) <- lift m U (F x) (f x);
        F <- abs_fun x F;
        f <- coerce f;
        f <- abs_fun x f;
@@ -464,8 +463,8 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
       if b then (* Replace A with a (RETURN A U) *)
         \nu A : MTele_Ty m,
           (* I use apply_sort A U to uncurry the values *)
-          (* apply_sort A U is just forall x y z, A z x y *)
-          s <- lift m U p false (F (apply_sort A U)) (f (apply_sort A U));
+          (* 101101000001110apply_sort A U is just forall x y z, A z x y *)
+          s <- lift m U (F (apply_sort A U)) (f (apply_sort A U));
           let '(mexistT _ T' f') := s in
           T'' <- abs_fun (P := fun A => TyTree) A T';
           f' <- coerce f';
@@ -477,7 +476,7 @@ Polymorphic Fixpoint lift (m : MTele) (U : ArgsOf m) (p l : bool) (T : TyTree) :
           print_term f'';;
           ret (mexistT to_ty T'' f'')
       else (* A is not monadic, no replacement *)
-        s <- lift m U p false (F A) (f A);
+        s <- lift m U (F A) (f A);
         let '(mexistT _ T' f') := s in
         T'' <- abs_fun (P := fun A => TyTree) A T';
         f' <- coerce f';
@@ -497,7 +496,7 @@ Definition lift' {T : TyTree} (f : to_ty T) : MTele -> M m:{T : TyTree & to_ty T
   fun (m : MTele) =>
   \nu U : ArgsOf m,
     c <- (checker' true false T);
-    lift m U true false T f.
+    lift m U T f.
 
 (*** Examples *)
 
@@ -513,9 +512,10 @@ Eval cbn in fun m => mprojT1 (m_mmatch' m).
 Let R := tyTree_FAType (fun A : Type => (tyTree_imp (tyTree_base A) (tyTree_M A))).
 Let r : to_ty R := @ret.
 Definition l_ret (m : MTele): m:{T : TyTree & to_ty T} := ltac:(mrun (lift' r m)).
-Definition tele_ex := fun T_1 T_2 T_3 => mTele (fun t_1 : T_1 => mTele (fun t_2 : T_2 => mTele (fun t_3 : T_3 => mBase))).
-Eval cbn in fun T_1 T_2 T_3 => to_ty (mprojT1 (l_ret (tele_ex T_1 T_2 T_3))).
-Eval cbn in fun T_1 T_2 T_3 => (mprojT2 (l_ret (tele_ex T_1 T_2 T_3))).
+Definition tele_motiv := fun (T : Type) (l : list T) => mTele (fun p : l <> nil => mBase).
+Eval cbn in fun T l => to_ty (mprojT1 (l_ret (tele_motiv T l))).
+Eval cbn in fun T l => (mprojT2 (l_ret (tele_motiv T l))).
+Eval cbn in fun T l => (mprojT1 (l_ret (tele_motiv T l))).
 
 (** random nat function *)
 Let T' := tyTree_imp (tyTree_base nat) (tyTree_imp (tyTree_base nat) (tyTree_base nat)).
