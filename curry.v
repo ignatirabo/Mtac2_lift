@@ -880,9 +880,15 @@ Eval compute in show_tree (nat -> nat -> nat).
 Module sandbox2.
 
 Definition mytele := mTele (fun _ : nat => mTele (fun _ : nat => mBase)).
-Eval cbn in to_ty (mprojT1 (l_ret mytele)).
-Eval cbn in (mprojT2 (l_bind mytele)).
+Fail Eval cbn in to_ty (mprojT1 (l_ret mytele)).
+Fail Eval cbn in (mprojT2 (l_bind mytele)).
 
-Let l := (mprojT2 (l_bind mytele)).
+Fail Let l := (mprojT2 (l_bind mytele)).
   
 End sandbox2.
+
+Module sandbox3.
+
+Eval cbn in ltac:(mrun (let T := M.type_of (@M.bind) in to_tree T)).
+
+End sandbox3.
