@@ -92,31 +92,16 @@ Definition test' :=  Eval simpl in @bind † [t: (a:nat)].
 Definition test'' (S:Set) := 
   Eval simpl in (@bind † [t: (l:list S) (_ : l <> nil)]).
 Definition test''' (S:Set) := 
-  Eval simpl in ((max S) † [t: (l:list S) (_ : l <> nil)]).
+  Eval simpl in (max S † [t: (l:list S) (_ : l <> nil)]).
 
 Definition test'''' (S: Set) (X:Type) : ((forall l, l <> nil -> (S -> S -> S) -> M X) -> forall l:list S, l <> nil -> M X) :=
   test'' S _ _ (test''' S).
 
-Module Test.
-Variable S : Set.
-Variable l : list S.
-Variable H : l <> [].
-Variable max : S -> S -> S.
-Variable f : forall x1 : list S, x1 <> [] -> M S.
-Variable l0 : list S.
-Variable H0 : l0 <> [].
-Let F := {| ret_ty := fun l' : list S => l' <> [] -> M S |} : RET_TY (list S -> Prop).
-Let mt1 := eval (MTeleMatch.MTele_of (fun l' : list S => l' <> [] -> M S))  : list S -> m:{ y & MTele_Ty y}.
-Let mt := {| mty_of := fun _z : list S => MTele_ty M (mprojT2 (mt1 _z)) |} : MTY_OF.
-
-Let a :=  S.selem_of (MTele_val (MTele_C Typeₛ Propₛ M (mprojT2 (mt1 l0)))).
-
-Eval cbn in a.
-End Test.
-
 
 Definition list_max (S: Set) : forall l:list S, l <> nil -> M S :=
-  test'''' S _ (fun l (H: l <> nil) (max : S -> S -> S) =>
+  (@bind † [t: (l: list S) (H: l <> nil)]) _ _ 
+    (max S † [t: (l:list S) (_ : l <> nil)])
+  (fun l (H: l <> nil) (max : S -> S -> S) =>
   (mfix2 f (l: list S) (H : l <> nil) : M S :=
     (mtmmatch l as l' return l' <> nil -> M S with
     | [? e] [e] =m> M.ret e † [t: (_ : [e] <> nil)]
@@ -124,6 +109,5 @@ Definition list_max (S: Set) : forall l:list S, l <> nil -> M S :=
       let m := max e1 e2 in
       f (m :: l') cons_not_nil
     end) H) l H).
-
 
 Eval compute in ltac:(mrun (list_max nat [1;2;3;2] cons_not_nil)).
