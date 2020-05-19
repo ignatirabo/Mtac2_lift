@@ -6,6 +6,7 @@ Import M.M.
 Set Universe Polymorphism.
 Unset Universe Minimization ToSet.
 Unset Printing Universes.
+Set Polymorphic Inductive Cumulativity.
 
 Local Definition MFA {n} (T : MTele_Ty n) := (MTele_val (MTele_C Type_sort Prop_sort M T)).
 Local Notation InF s n := (forall now_ty : forall s0 : Sort, MTele_Sort s0 n -> s0, (forall (s0 : Sort) (T : MTele_Sort s0 n), MTele_val T -> now_ty s0 T) -> s).
@@ -159,17 +160,17 @@ Fixpoint checker (pol : bool) (l : bool) (X : TyTree) : Prop :=
   end.
 
 
-Goal TyTree.
-mrun (to_tree' (@ret)).
-Show Proof. Qed.
+(* Goal TyTree. *)
+(* mrun (to_tree' (@ret)). *)
+(* Show Proof. Qed. *)
 
-Goal TyTree.
-mrun (to_tree' (@bind)).
-Show Proof. Qed.
+(* Goal TyTree. *)
+(* mrun (to_tree' (@bind)). *)
+(* Show Proof. Qed. *)
 
-Goal TyTree.
-mrun (to_tree (forall (m : MTele) (A B : MTele_Ty m), MFA A -> (MTele_val A -> MFA B) -> MFA B)).
-Show Proof. Qed.
+(* Goal TyTree. *)
+(* mrun (to_tree (forall (m : MTele) (A B : MTele_Ty m), MFA A -> (MTele_val A -> MFA B) -> MFA B)). *)
+(* Show Proof. Qed. *)
 
 (*
 Notation "'[withP' now_ty , now_val '=>' t ]" :=

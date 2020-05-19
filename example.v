@@ -2,6 +2,8 @@ From Mtac2 Require Import Mtac2 MTele  meta.MTeleMatch meta.MFix.
 
 
 Set Universe Polymorphism.
+Unset Universe Minimization ToSet.
+Set Polymorphic Inductive Cumulativity.
 
 Import M.
 Import M.notations.
@@ -46,6 +48,10 @@ Fail Definition list_max (S: Set)  :=
 
 Require Import curry.
 Eval cbn in ltac:(mrun (let T := M.type_of (@M.bind) in to_tree T)).
+
+Notation "[t: a .. b ]" := (mTele (fun a => .. (mTele (fun b => mBase)) ..))
+  (a binder, b binder, at level 0).
+
 Require Import Mtac2.lib.Specif.
 Import ProdNotations.
 
@@ -62,61 +68,62 @@ Definition lift {A:Type} (c: A) (m : MTele) : M m:{T : TyTree & to_ty T} :=
   | mNone => raise CantCoerce
   end.
 
-(* Definition unfold_type_of {A} (c: A) := *)
-(*   let T := dreduce (@type_of) (type_of c) in *)
-(*   M.dbg_term "T: " T;; *)
-(*   M.ret T. *)
-(* Notation "'ty_of' x" := (ltac:(mrun (unfold_type_of x))) (at level 0). *)
+Definition unfold_type_of {A} (c: A) :=
+  let T := dreduce (@type_of) (type_of c) in
+  M.dbg_term "T: " T;;
+  M.ret T.
+Notation "'ty_of' x" := (ltac:(mrun (unfold_type_of x))) (at level 0).
+
+Print Module M.M.
 
 
-(* Notation "c † m" := (ltac:(mrun ( *)
-(*   (* tA <- to_tree C; *) *)
-(*   (* c' <- coerce c; *) *)
-(*   C' <- unfold_type_of c; *)
-(*   M.dbg_term "C'" C';; *)
-(*   let tA := (ltac: (mrun (to_tree C'))) in *)
-(*   @lift' tA c m *)
-(* ))) (at level 0). *)
+Notation "d † m" := (
+  let c := d in 
+  ltac:(
+  let C := constr:(ltac: (mrun (unfold_type_of c))) in
+  let tA := constr:(ltac: (mrun (to_tree C))) in
+  let lfted := constr:(ltac: (mrun (@lift' tA c m))) in
+  exact (mprojT2 lfted)
+  )
+) (at level 50).
 
-Notation "c † m" := (ltac:(mrun (
-  lift c m
-))) (at level 0).
 
-Notation "[t: a .. b ]" := (mTele (fun a => .. (mTele (fun b => mBase)) ..)) 
-  (a binder, b binder, at level 0).
+Definition test' :=  Eval simpl in @bind † [t: (a:nat)].
+Definition test'' (S:Set) := 
+  Eval simpl in (@bind † [t: (l:list S) (_ : l <> nil)]).
+Definition test''' (S:Set) := 
+  Eval simpl in ((max S) † [t: (l:list S) (_ : l <> nil)]).
 
-Definition test_tele_list {S} (l: list S) : MTele := [t: (_ : l <> nil)].
+Definition test'''' (S: Set) (X:Type) : ((forall l, l <> nil -> (S -> S -> S) -> M X) -> forall l:list S, l <> nil -> M X) :=
+  test'' S _ _ (test''' S).
 
-Set Printing Universes.
+Module Test.
+Variable S : Set.
+Variable l : list S.
+Variable H : l <> [].
+Variable max : S -> S -> S.
+Variable f : forall x1 : list S, x1 <> [] -> M S.
+Variable l0 : list S.
+Variable H0 : l0 <> [].
+Let F := {| ret_ty := fun l' : list S => l' <> [] -> M S |} : RET_TY (list S -> Prop).
+Let mt1 := eval (MTeleMatch.MTele_of (fun l' : list S => l' <> [] -> M S))  : list S -> m:{ y & MTele_Ty y}.
+Let mt := {| mty_of := fun _z : list S => MTele_ty M (mprojT2 (mt1 _z)) |} : MTY_OF.
 
-Set Printing All.
-Definition bla := (@mexistT TyTree (fun T' : TyTree => to_ty T')
-   (tyTree_FAVal Type
-      (fun x : Type =>
-       tyTree_FAVal Type
-         (fun x0 : Type =>
-          tyTree_imp (tyTree_M x)
-            (tyTree_imp (tyTree_imp (tyTree_base x) (tyTree_M x0))
-               (@tyTree_MFA (@mTele nat (fun _ : nat => mBase))
-                  (@MTele_Cs S.Type_sort
-                     (@mTele nat (fun _ : nat => mBase)) x0))))))
-   (fun (x x0 : Type) (x1 : to_ty (tyTree_M x))
-      (x2 : to_ty (tyTree_imp (tyTree_base x) (tyTree_M x0))) =>
-    @MTele_cs S.Type_sort (@mTele nat (fun _ : nat => mBase)) x0
-      (internal_meq_rew_r Type
-         (to_ty
-            (tyTree_FAVal Type
-               (fun t : Type =>
-                tyTree_FAVal Type
-                  (fun t0 : Type =>
-                   tyTree_imp (tyTree_M t)
-                     (tyTree_imp
-                        (tyTree_imp (tyTree_base t) (tyTree_M t0))
-                        (tyTree_M t0))))))
-         (forall (A B : Type) (_ : t A) (_ : forall _ : A, t B), t B)
-         (fun A0 : Type => A0) (@bind)
-         (@meq_refl Type
-            (forall (A B : Type) (_ : t A) (_ : forall _ : A, t B),
-             t B)) x x0 x1 x2))).
+Let a :=  S.selem_of (MTele_val (MTele_C Typeₛ Propₛ M (mprojT2 (mt1 l0)))).
 
-Fail Definition test' :=  @bind † [t: (_ : nat)].
+Eval cbn in a.
+End Test.
+
+
+Definition list_max (S: Set) : forall l:list S, l <> nil -> M S :=
+  test'''' S _ (fun l (H: l <> nil) (max : S -> S -> S) =>
+  (mfix2 f (l: list S) (H : l <> nil) : M S :=
+    (mtmmatch l as l' return l' <> nil -> M S with
+    | [? e] [e] =m> M.ret e † [t: (_ : [e] <> nil)]
+    | [? e1 e2 l'] (e1 :: e2 :: l') =m> fun nonE =>
+      let m := max e1 e2 in
+      f (m :: l') cons_not_nil
+    end) H) l H).
+
+
+Eval compute in ltac:(mrun (list_max nat [1;2;3;2] cons_not_nil)).
