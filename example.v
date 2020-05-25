@@ -22,22 +22,19 @@ discriminate.
 Qed.
 
 (* Problem: fixed to nat *)
-(*
 Definition list_max_nat :=
-  mfix f (l: list nat) : l <> nil -> M nat :=
-    mtmmatch l as l' return l' <> nil -> M nat with
+  mfix2 f (l: list nat) (H : l <> nil) : M nat :=
+    (mtmmatch l as l' return l' <> nil -> M nat with
     | [? e] [e] =m> fun nonE => M.ret e
     | [? e1 e2 l'] (e1 :: e2 :: l') =m> fun nonE =>
-      m <- Nat.max e1 e2;
+      let m := Nat.max e1 e2 in
       f (m :: l') cons_not_nil
-    end.
-*)
+    end) H.
 
 (* we can't write this: we need the lifted bind *)
 Fail Definition list_max (S: Set)  :=
   max <- max S; (* error, the types clearly do not allow this *)
   (* the mfix has tipe forall ... *)
-  (* with l_bind it should be possible? *)
   mfix f (l: list S) : l <> nil -> M S :=
     mtmmatch l as l' return l' <> nil -> M S with
     | [? e] [e] =m> fun nonE=>M.ret e
@@ -46,9 +43,11 @@ Fail Definition list_max (S: Set)  :=
       f (m :: l') cons_not_nil
     end.
 
+(* Import Lift *)
 Require Import curry.
 Eval cbn in ltac:(mrun (let T := M.type_of (@M.bind) in to_tree T)).
 
+(* Notation for telescopes *)
 Notation "[t: a .. b ]" := (mTele (fun a => .. (mTele (fun b => mBase)) ..))
   (a binder, b binder, at level 0).
 
@@ -76,7 +75,7 @@ Notation "'ty_of' x" := (ltac:(mrun (unfold_type_of x))) (at level 0).
 
 Print Module M.M.
 
-
+(* Notation for extracting lifted function *)
 Notation "d † m" := (
   let c := d in 
   ltac:(
@@ -97,7 +96,8 @@ Definition test''' (S:Set) :=
 Definition test'''' (S: Set) (X:Type) : ((forall l, l <> nil -> (S -> S -> S) -> M X) -> forall l:list S, l <> nil -> M X) :=
   test'' S _ _ (test''' S).
 
-
+(* This is the working example where we use lifting
+to generalize bind *)
 Definition list_max (S: Set) : forall l:list S, l <> nil -> M S :=
   (@bind † [t: (l: list S) (H: l <> nil)]) _ _ 
     (max S † [t: (l:list S) (_ : l <> nil)])
