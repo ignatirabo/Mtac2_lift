@@ -44,7 +44,7 @@ Fail Definition list_max (S: Set)  :=
     end.
 
 (* Import Lift *)
-Require Import curry.
+Require Import lift.
 Eval cbn in ltac:(mrun (let T := M.type_of (@M.bind) in to_tree T)).
 
 (* Notation for telescopes *)
