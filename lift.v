@@ -13,7 +13,6 @@ Local Definition MFA {n} (T : MTele_Ty n) := (MTele_val (MTele_C Type_sort Prop_
 (* Allows recursion over Types *)
 (* If recursion is needed then it's TyTree, if not use Type *)
 Inductive TyTree : Type :=
-| tyTree_val {m : MTele} (T : MTele_Ty m) : TyTree
 | tyTree_M (T : Type) : TyTree
 | tyTree_MFA {m : MTele} (T : MTele_Ty m) : TyTree
 | tyTree_In (s : Sort) {m : MTele} (F : accessor m -> s) : TyTree
@@ -23,12 +22,12 @@ Inductive TyTree : Type :=
 | tyTree_FAVal (T : Type) (F : T -> TyTree) : TyTree
 | tyTree_FAType (F : Type -> TyTree) : TyTree
 | tyTree_base (T : Type) : TyTree
+(* | tyTree_val {m : MTele} (T : MTele_Ty m) : TyTree *)
 .
 
 (* Turn TyTrees to Types *)
 Fixpoint to_ty (X : TyTree) : Type :=
   match X as X' with
-  | tyTree_val T => MTele_val T
   | tyTree_M T => M T
   | tyTree_MFA T => MFA T
   | tyTree_In s F => MTele_val (MTele_In s F)
@@ -38,6 +37,7 @@ Fixpoint to_ty (X : TyTree) : Type :=
   | tyTree_FAVal T F => forall t : T, to_ty (F t)
   | tyTree_FAType F => forall T : Type, to_ty (F T)
   | tyTree_base T => T
+  (* | tyTree_val T => MTele_val T *)
   end.
 
 (* Partial inverse of to_ty *)
